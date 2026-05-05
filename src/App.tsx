@@ -719,27 +719,27 @@ function ResourceCard({ resource, idx }: { resource: Resource; idx: number }) {
 
         <AnimatePresence>
           {isOpen && (
-            <div className="fixed inset-0 z-[200] bg-slate-900/90 backdrop-blur-xl flex flex-col p-4 md:p-12">
-              <div className="flex items-center justify-between mb-8 text-white">
-                <div>
-                  <h2 className="text-3xl font-bold font-heading">{resource.title}</h2>
-                  <p className="text-slate-400 text-sm">{resource.description}</p>
+            <div className="fixed inset-0 z-[200] bg-slate-900/95 backdrop-blur-sm flex flex-col p-2 md:p-6">
+              <div className="flex items-center justify-between mb-4 text-white px-2">
+                <div className="max-w-[70%]">
+                  <h2 className="text-2xl md:text-3xl font-bold font-heading line-clamp-1">{resource.title}</h2>
+                  <p className="text-slate-400 text-[10px] md:text-sm line-clamp-1">{resource.description}</p>
                 </div>
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2 md:gap-4">
                   {resource.url && (
                     <a 
                       href={resource.url} 
                       target="_blank" 
                       rel="noopener noreferrer" 
-                      className="hidden md:flex items-center gap-2 px-6 py-3 bg-white/5 hover:bg-white/10 rounded-2xl text-xs font-bold transition-all"
+                      className="hidden sm:flex items-center gap-2 px-4 md:px-6 py-2 md:py-3 bg-white/10 hover:bg-white/20 rounded-2xl text-[10px] md:text-xs font-bold transition-all border border-white/10"
                     >
-                      <ExternalLink size={14} /> Obrir en pestanya nova
+                      <ExternalLink size={14} /> Obrir
                     </a>
                   )}
-                  <button onClick={() => setIsOpen(false)} className="p-4 bg-white/10 hover:bg-white/20 rounded-2xl transition-all"><X /></button>
+                  <button onClick={() => setIsOpen(false)} className="p-3 md:p-4 bg-white/10 hover:bg-white/20 rounded-2xl transition-all"><X /></button>
                 </div>
               </div>
-              <div className="flex-1 bg-white rounded-3xl overflow-hidden shadow-2xl relative">
+              <div className="flex-1 bg-white rounded-xl md:rounded-3xl overflow-hidden shadow-2xl relative">
                 <iframe 
                   src={resource.type === 'html' ? undefined : resource.url}
                   srcDoc={resource.type === 'html' ? resource.content : undefined}

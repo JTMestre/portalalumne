@@ -4,6 +4,7 @@ export interface School {
   id: string;
   name: string;
   logo?: string;
+  cover?: string;
   slug: string;
   themeColor?: string;
   order?: number;
@@ -37,6 +38,7 @@ export interface News {
   title: string;
   content: string;
   image?: string;
+  isVisible?: boolean;
   date: any;
   schoolId?: string;
 }

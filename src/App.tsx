@@ -2,7 +2,7 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { collection, onSnapshot, doc, setDoc, addDoc, deleteDoc, updateDoc } from 'firebase/firestore';
 import { db, auth, login, logout, handleFirestoreError } from './lib/firebase';
-import { SiteConfig, OperationType, School, News, Resource } from './types';
+import { SiteConfig, OperationType, School, News, Resource, AdminUser, Cycle } from './types';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Building2, 
@@ -29,7 +29,9 @@ import {
   Users,
   Eye,
   EyeOff,
-  ArrowRight
+  ArrowRight,
+  ArrowUp,
+  ArrowDown
 } from 'lucide-react';
 import { cn } from './lib/utils';
 
@@ -71,9 +73,6 @@ export default function App() {
   useEffect(() => {
     const unsubAuth = onAuthStateChanged(auth, (u) => {
       setUser(u);
-      // Hardcoded admin check from instruction Email + Dynamic check
-      const isCollectionAdmin = admins.some(a => a.email.toLowerCase() === u?.email?.toLowerCase());
-      setIsAdmin(u?.email === 'hylomi3ia@gmail.com' || isCollectionAdmin);
     });
 
     // Subscriptions
@@ -128,6 +127,15 @@ export default function App() {
       unsubAdmins();
     };
   }, []);
+
+  useEffect(() => {
+    if (!user) {
+      setIsAdmin(false);
+      return;
+    }
+    const isCollectionAdmin = admins.some(a => a.email.toLowerCase() === user.email?.toLowerCase());
+    setIsAdmin(user.email === 'hylomi3ia@gmail.com' || isCollectionAdmin);
+  }, [user, admins]);
 
   // Inject dynamic styles
   useEffect(() => {
@@ -233,6 +241,8 @@ export default function App() {
             )}
           </AnimatePresence>
         </main>
+        
+        <Footer />
 
         {isAdmin && isAdminPanelOpen && (
           <AdminPanel onClose={() => setIsAdminPanelOpen(false)} />
@@ -375,14 +385,24 @@ function Navbar({ onOpenAdmin }: { onOpenAdmin: () => void }) {
 
 // Home Component
 function Home() {
-  const { config, news, schools, setActiveSchoolId } = useApp();
+  const { config, news, schools, resources, setActiveSchoolId } = useApp();
+
+  // Get 6 most recent visible resources
+  const recentResources = [...resources]
+    .filter(r => r.isVisible !== false)
+    .sort((a, b) => {
+      const dateA = a.createdAt?.seconds || 0;
+      const dateB = b.createdAt?.seconds || 0;
+      return dateB - dateA;
+    })
+    .slice(0, 6);
 
   return (
     <motion.div 
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="max-w-7xl mx-auto px-4 space-y-6"
+      className="max-w-7xl mx-auto px-4 space-y-12"
     >
       <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
         {/* Main Hero Card */}
@@ -431,7 +451,16 @@ function Home() {
                   onClick={() => setActiveSchoolId(school.id)}
                   className="w-full flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100 hover:border-primary/30 hover:bg-white hover:shadow-lg transition-all group"
                 >
-                  <span className="font-bold">{school.name}</span>
+                  <div className="flex items-center gap-4">
+                    <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center p-1.5 border border-slate-100 shadow-sm">
+                      {school.logo ? (
+                        <img src={school.logo} alt="" className="w-full h-full object-contain" referrerPolicy="no-referrer" />
+                      ) : (
+                        <Building2 size={18} className="text-slate-300" />
+                      )}
+                    </div>
+                    <span className="font-bold">{school.name}</span>
+                  </div>
                   <ChevronRight size={18} className="text-slate-300 group-hover:text-primary group-hover:translate-x-1 transition-all" />
                 </button>
               ))}
@@ -442,9 +471,30 @@ function Home() {
           </div>
         </div>
 
+        {/* Recent Resources Slider */}
+        {recentResources.length > 0 && (
+          <div className="md:col-span-12 space-y-6 overflow-hidden">
+            <div className="flex items-center justify-between px-2">
+              <h2 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+                <Clock className="text-primary" size={24} /> Últimes Novetats
+              </h2>
+              <div className="flex items-center gap-1 text-slate-400 text-xs font-bold uppercase tracking-wider">
+                Llisca <ArrowRight size={14} />
+              </div>
+            </div>
+            <div className="flex gap-6 overflow-x-auto pb-4 snap-x no-scrollbar -mx-4 px-4">
+              {recentResources.map((res, idx) => (
+                <div key={res.id} className="min-w-[320px] md:min-w-[400px] snap-start">
+                  <ResourceCard resource={res} idx={idx} />
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* News Grid Section */}
         <div className="md:col-span-12 grid grid-cols-1 md:grid-cols-3 gap-6">
-          {news.slice(0, 3).map((item, idx) => (
+          {news.filter(n => n.isVisible !== false).slice(0, 3).map((item, idx) => (
             <motion.div 
               key={item.id}
               initial={{ opacity: 0, y: 20 }}
@@ -515,19 +565,31 @@ function SchoolView({ schoolId }: { schoolId: string }) {
     >
       <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
         {/* School Header Bento */}
-        <div className="md:col-span-12 bento-card p-12 flex flex-col md:flex-row items-center gap-8 min-h-[240px]">
-          <div className="w-32 h-32 bg-slate-50 rounded-3xl flex items-center justify-center p-6 border border-slate-100 shadow-inner">
+        <div className="md:col-span-12 bento-card p-12 flex flex-col md:flex-row items-center gap-8 min-h-[240px] relative overflow-hidden">
+          {school.cover && (
+            <>
+              <img 
+                src={school.cover} 
+                alt="" 
+                className="absolute inset-0 w-full h-full object-cover opacity-40 mix-blend-overlay transition-transform duration-700 hover:scale-105"
+                referrerPolicy="no-referrer"
+              />
+              <div className="absolute inset-0 bg-gradient-to-r from-white via-white/80 to-transparent md:to-white/20" />
+            </>
+          )}
+          
+          <div className="w-32 h-32 bg-white/80 backdrop-blur-xl rounded-3xl flex items-center justify-center p-6 border border-white/50 shadow-xl relative z-10">
             {school.logo ? (
-              <img src={school.logo} alt={school.name} className="w-full h-full object-contain" />
+              <img src={school.logo} alt={school.name} className="w-full h-full object-contain" referrerPolicy="no-referrer" />
             ) : (
               <Building2 size={48} className="text-primary/20" />
             )}
           </div>
-          <div className="text-center md:text-left flex-1">
+          <div className="text-center md:text-left flex-1 relative z-10">
             <h1 className="text-5xl md:text-7xl font-bold font-heading mb-4 leading-none tracking-tighter">{school.name}</h1>
             <div className="flex flex-wrap justify-center md:justify-start gap-2">
-              <span className="stat-chip">🏫 Educació Primària</span>
-              <span className="stat-chip bg-green-50 text-green-700">{filteredResources.length} Recursos Actius</span>
+              <span className="stat-chip bg-white/50 backdrop-blur-sm">🏫 Educació Primària</span>
+              <span className="stat-chip bg-green-50/80 backdrop-blur-sm text-green-700">{filteredResources.length} Recursos Actius</span>
             </div>
           </div>
         </div>
@@ -907,6 +969,24 @@ function SchoolsManager({ schools }: { schools: School[] }) {
     }
   };
 
+  const moveSchool = async (index: number, direction: 'up' | 'down') => {
+    const newIndex = direction === 'up' ? index - 1 : index + 1;
+    if (newIndex < 0 || newIndex >= schools.length) return;
+
+    const currentSchool = schools[index];
+    const neighborSchool = schools[newIndex];
+
+    try {
+      // Swipe priorities
+      await Promise.all([
+        updateDoc(doc(db, 'schools', currentSchool.id), { order: newIndex }),
+        updateDoc(doc(db, 'schools', neighborSchool.id), { order: index })
+      ]);
+    } catch (e) {
+      handleFirestoreError(e, OperationType.UPDATE, 'schools/reorder');
+    }
+  };
+
   const startEdit = (s: School) => {
     setEditingSchool(s);
     setFormData({ name: s.name, logo: s.logo, cover: s.cover });
@@ -952,9 +1032,25 @@ function SchoolsManager({ schools }: { schools: School[] }) {
       )}
 
       <div className="space-y-4">
-        {schools.map(s => (
+        {schools.map((s, idx) => (
           <div key={s.id} className="bg-white p-6 rounded-[2rem] border border-neutral-100 flex items-center justify-between group shadow-sm hover:shadow-md transition-all">
              <div className="flex items-center gap-4">
+               <div className="flex flex-col items-center gap-1 pr-2">
+                 <button 
+                   disabled={idx === 0}
+                   onClick={() => moveSchool(idx, 'up')}
+                   className={`p-1 rounded-md transition-colors ${idx === 0 ? 'text-neutral-100' : 'text-neutral-400 hover:bg-neutral-100 hover:text-primary'}`}
+                 >
+                   <ArrowUp size={16} />
+                 </button>
+                 <button 
+                   disabled={idx === schools.length - 1}
+                   onClick={() => moveSchool(idx, 'down')}
+                   className={`p-1 rounded-md transition-colors ${idx === schools.length - 1 ? 'text-neutral-100' : 'text-neutral-400 hover:bg-neutral-100 hover:text-primary'}`}
+                 >
+                   <ArrowDown size={16} />
+                 </button>
+               </div>
                <div className="w-12 h-12 bg-neutral-50 rounded-xl flex items-center justify-center border border-neutral-100 overflow-hidden p-2">
                  {s.logo ? (
                    <img src={s.logo} className="w-full h-full object-contain" alt="" referrerPolicy="no-referrer" />
@@ -993,19 +1089,61 @@ function SchoolsManager({ schools }: { schools: School[] }) {
 // News Manager
 function NewsManager({ news, schools }: { news: News[]; schools: School[] }) {
   const [isAdding, setIsAdding] = useState(false);
-  const [formData, setFormData] = useState<Partial<News>>({ title: '', content: '' });
+  const [editingNews, setEditingNews] = useState<News | null>(null);
+  const [formData, setFormData] = useState<Partial<News>>({ title: '', content: '', isVisible: true });
 
   const handleAdd = async () => {
     if (!formData.title || !formData.content) return;
     try {
       await addDoc(collection(db, 'news'), {
         ...formData,
-        date: new Date() // Simplified for now
+        isVisible: formData.isVisible !== false,
+        date: new Date()
       });
-      setFormData({ title: '', content: '' });
-      setIsAdding(false);
+      resetForm();
     } catch (e) {
       handleFirestoreError(e, OperationType.CREATE, 'news');
+    }
+  };
+
+  const handleUpdate = async () => {
+    if (!editingNews || !formData.title || !formData.content) return;
+    try {
+      await updateDoc(doc(db, 'news', editingNews.id), formData);
+      resetForm();
+    } catch (e) {
+      handleFirestoreError(e, OperationType.UPDATE, `news/${editingNews.id}`);
+    }
+  };
+
+  const resetForm = () => {
+    setFormData({ title: '', content: '', isVisible: true });
+    setIsAdding(false);
+    setEditingNews(null);
+  };
+
+  const startEdit = (n: News) => {
+    setEditingNews(n);
+    setFormData({ ...n });
+    setIsAdding(false);
+  };
+
+  const toggleVisibility = async (n: News) => {
+    try {
+      await updateDoc(doc(db, 'news', n.id), {
+        isVisible: !n.isVisible
+      });
+    } catch (e) {
+      handleFirestoreError(e, OperationType.UPDATE, `news/${n.id}`);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('Segur que vols eliminar aquesta notícia?')) return;
+    try {
+      await deleteDoc(doc(db, 'news', id));
+    } catch (e) {
+      handleFirestoreError(e, OperationType.DELETE, `news/${id}`);
     }
   };
 
@@ -1013,50 +1151,112 @@ function NewsManager({ news, schools }: { news: News[]; schools: School[] }) {
     <div className="space-y-6">
       <div className="flex items-center justify-between mb-8">
         <h3 className="text-xl font-bold">Gestió de Notícies</h3>
-        {!isAdding && <button onClick={() => setIsAdding(true)} className="px-6 py-3 bg-primary text-white rounded-xl font-bold text-sm">Nova Notícia</button>}
+        {!isAdding && !editingNews && (
+          <button onClick={() => setIsAdding(true)} className="px-6 py-3 bg-primary text-white rounded-xl font-bold text-sm flex items-center gap-2">
+            <Plus size={18}/> Nova Notícia
+          </button>
+        )}
       </div>
 
-      {isAdding && (
-        <div className="bg-white p-8 rounded-3xl shadow-lg border border-primary/20 space-y-4 mb-8">
+      {(isAdding || editingNews) && (
+        <div className="bg-white p-8 rounded-3xl shadow-lg border border-primary/20 space-y-6 mb-12">
+          <h4 className="text-lg font-bold">{editingNews ? 'Editar Notícia' : 'Afegir Nova Notícia'}</h4>
           <Input label="Títol" value={formData.title} onChange={v => setFormData({...formData, title: v})} />
           <div className="space-y-1">
             <label className="text-xs font-bold uppercase tracking-wider text-neutral-400">Contingut</label>
             <textarea 
               value={formData.content} 
               onChange={e => setFormData({...formData, content: e.target.value})}
-              className="w-full p-4 bg-neutral-50 border border-neutral-100 rounded-2xl min-h-[150px] outline-none focus:border-primary transition-all"
+              className="w-full p-6 bg-neutral-50 border border-neutral-100 rounded-2xl min-h-[200px] outline-none focus:border-primary transition-all text-slate-700"
             />
           </div>
-          <Input label="Imatge (URL)" value={formData.image} onChange={v => setFormData({...formData, image: v})} />
-          <div className="flex gap-4">
-            <button onClick={handleAdd} className="flex-1 py-4 bg-primary text-white rounded-2xl font-bold">Publicar</button>
-            <button onClick={() => setIsAdding(false)} className="px-8 py-4 bg-neutral-100 rounded-2xl font-bold">Cancel·lar</button>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <Input label="Imatge (URL)" value={formData.image || ''} onChange={v => setFormData({...formData, image: v})} />
+            <div className="flex items-center gap-4 p-4 bg-neutral-50 rounded-2xl border border-neutral-100">
+               <span className="text-sm font-bold text-neutral-600 flex-1">Notícia Visible</span>
+               <button 
+                 type="button"
+                 onClick={() => setFormData({...formData, isVisible: !formData.isVisible})}
+                 className={cn(
+                   "w-12 h-6 rounded-full transition-all relative border border-slate-200",
+                   formData.isVisible !== false ? "bg-primary" : "bg-neutral-300"
+                 )}
+               >
+                 <div className={cn("absolute top-0.5 w-4.5 h-4.5 bg-white rounded-full transition-all shadow-sm", formData.isVisible !== false ? "right-0.5" : "left-0.5")} />
+               </button>
+            </div>
+          </div>
+
+          <div className="flex gap-4 pt-4">
+            <button 
+              onClick={editingNews ? handleUpdate : handleAdd} 
+              className="flex-1 py-4 bg-primary text-white rounded-2xl font-bold transition-all active:scale-95"
+            >
+              {editingNews ? 'Guardar Canvis' : 'Publicar Notícia'}
+            </button>
+            <button 
+              onClick={resetForm} 
+              className="px-10 py-4 bg-neutral-100 text-neutral-600 rounded-2xl font-bold transition-all active:scale-95"
+            >
+              Cancel·lar
+            </button>
           </div>
         </div>
       )}
 
-      {news.map(n => (
-        <div key={n.id} className="bg-white p-6 rounded-2xl border border-neutral-100 flex items-center justify-between group">
-           <div className="flex-1">
-             <h4 className="font-bold text-lg">{n.title}</h4>
-             <p className="text-neutral-500 text-sm line-clamp-1">{n.content}</p>
-           </div>
-           <button 
-             type="button"
-             onClick={async (e) => {
-               e.stopPropagation();
-               try {
-                 await deleteDoc(doc(db, 'news', n.id));
-               } catch (e) {
-                 handleFirestoreError(e, OperationType.DELETE, `news/${n.id}`);
-               }
-             }} 
-             className="p-3 text-red-600 hover:bg-neutral-50 rounded-xl transition-all"
-           >
-             <Trash2 size={18} />
-           </button>
-        </div>
-      ))}
+      <div className="space-y-4">
+        {news.map(n => (
+          <div key={n.id} className="bg-white p-6 rounded-[2rem] border border-neutral-100 flex items-center justify-between group transition-all hover:shadow-md">
+             <div className="flex items-center gap-4">
+               <div className="w-20 h-14 bg-neutral-50 rounded-xl overflow-hidden border border-neutral-100">
+                 {n.image ? (
+                   <img src={n.image} className="w-full h-full object-cover" alt="" referrerPolicy="no-referrer" />
+                 ) : (
+                   <div className="w-full h-full flex items-center justify-center text-neutral-200">
+                     <Building2 size={24} />
+                   </div>
+                 )}
+               </div>
+               <div>
+                 <h4 className="font-bold text-lg text-slate-800">{n.title}</h4>
+                 <div className="flex items-center gap-3">
+                   <p className="text-neutral-400 text-xs line-clamp-1 max-w-[300px]">{n.content}</p>
+                   {n.isVisible === false && <span className="text-[9px] bg-red-100 text-red-600 px-2 py-0.5 rounded-full font-bold">OCULTA</span>}
+                 </div>
+               </div>
+             </div>
+             
+             <div className="flex items-center gap-2">
+               <button 
+                type="button"
+                onClick={() => toggleVisibility(n)}
+                className={cn(
+                  "p-3 rounded-xl transition-all",
+                  n.isVisible !== false ? "text-emerald-500 bg-emerald-50" : "text-neutral-300 hover:text-neutral-600"
+                )}
+                title={n.isVisible !== false ? "Visible" : "Oculta"}
+              >
+                {n.isVisible !== false ? <Eye size={20}/> : <EyeOff size={20}/>}
+              </button>
+               <button 
+                 type="button" 
+                 onClick={() => startEdit(n)}
+                 className="p-4 text-slate-400 hover:text-primary hover:bg-primary/5 rounded-2xl transition-all"
+               >
+                 <Edit size={20}/>
+               </button>
+               <button 
+                 type="button"
+                 onClick={() => handleDelete(n.id)} 
+                 className="p-4 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-2xl transition-all"
+               >
+                 <Trash2 size={20} />
+               </button>
+             </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -1387,6 +1587,30 @@ function AdminsManager({ admins }: { admins: AdminUser[] }) {
         )}
       </div>
     </div>
+  );
+}
+
+function Footer() {
+  return (
+    <footer className="py-12 border-t border-slate-200/60 text-center">
+      <div className="max-w-7xl mx-auto px-6 flex flex-col items-center space-y-6">
+        <div className="flex items-center gap-2 text-slate-400 text-[10px] font-bold uppercase tracking-[0.3em]">
+          Plataforma de Recursos Educatius
+        </div>
+        
+        <div className="h-px w-12 bg-slate-200" />
+        
+        <div className="space-y-1">
+          <p className="text-slate-500 text-sm font-medium">
+            © {new Date().getFullYear()} Tots els drets reservats. Projecte creat amb fins educatius.
+          </p>
+          <div className="flex items-center justify-center gap-2 text-slate-400">
+             <span className="text-[10px] font-bold uppercase tracking-widest">Creat per</span>
+             <span className="text-slate-900 font-bold px-3 py-1 bg-white border border-slate-100 rounded-full text-xs shadow-sm">Javier Tejero</span>
+          </div>
+        </div>
+      </div>
+    </footer>
   );
 }
 

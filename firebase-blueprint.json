@@ -8,6 +8,7 @@
         "id": { "type": "string" },
         "name": { "type": "string" },
         "logo": { "type": "string" },
+        "cover": { "type": "string" },
         "slug": { "type": "string" },
         "themeColor": { "type": "string" },
         "order": { "type": "number" }
@@ -28,6 +29,7 @@
         "url": { "type": "string" },
         "content": { "type": "string" },
         "thumbnail": { "type": "string" },
+        "isVisible": { "type": "boolean" },
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["schoolId", "title", "type"]
@@ -42,6 +44,7 @@
         "title": { "type": "string" },
         "content": { "type": "string" },
         "image": { "type": "string" },
+        "isVisible": { "type": "boolean" },
         "date": { "type": "string", "format": "date-time" }
       },
       "required": ["title", "content"]

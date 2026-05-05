@@ -1,0 +1,62 @@
+@import "tailwindcss";
+
+@theme {
+  --color-primary: var(--primary);
+  --color-accent: var(--accent);
+  --color-background: var(--background);
+  --radius-bento: 1.5rem;
+  --radius-bento-lg: 2.5rem;
+  --shadow-bento: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+@layer base {
+  :root {
+    --primary: #2563eb;
+    --accent: #f59e0b;
+    --background: #f1f5f9;
+  }
+
+  body {
+    @apply antialiased bg-background;
+    transition: font-size 0.2s ease;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply tracking-tighter;
+  }
+}
+
+@layer components {
+  .bento-card {
+    @apply bg-white rounded-bento border border-slate-200 shadow-bento transition-all duration-300;
+  }
+  
+  .bento-card:hover {
+    @apply shadow-xl -translate-y-1;
+  }
+
+  .stat-chip {
+    @apply bg-blue-50 text-blue-800 px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider;
+  }
+
+  .admin-panel-dark {
+    @apply bg-[#1e293b] text-white;
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-slate-200 rounded-full;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-slate-300;
+}

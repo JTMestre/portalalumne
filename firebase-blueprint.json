@@ -1,0 +1,84 @@
+{
+  "entities": {
+    "School": {
+      "title": "School",
+      "description": "Represents an educational institution.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "logo": { "type": "string" },
+        "slug": { "type": "string" },
+        "themeColor": { "type": "string" },
+        "order": { "type": "number" }
+      },
+      "required": ["name", "slug"]
+    },
+    "Resource": {
+      "title": "Resource",
+      "description": "An educational resource linked to a school.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "schoolId": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "type": { "type": "string", "enum": ["video", "game", "doc", "link", "kahoot", "html"] },
+        "url": { "type": "string" },
+        "content": { "type": "string" },
+        "thumbnail": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["schoolId", "title", "type"]
+    },
+    "News": {
+      "title": "News",
+      "description": "News article or announcement.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "schoolId": { "type": "string" },
+        "title": { "type": "string" },
+        "content": { "type": "string" },
+        "image": { "type": "string" },
+        "date": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "content"]
+    },
+    "SiteConfig": {
+      "title": "SiteConfig",
+      "description": "Global configuration for the website design and content.",
+      "type": "object",
+      "properties": {
+        "siteName": { "type": "string" },
+        "heroTitle": { "type": "string" },
+        "heroSubtitle": { "type": "string" },
+        "heroImage": { "type": "string" },
+        "primaryColor": { "type": "string" },
+        "accentColor": { "type": "string" },
+        "fontSans": { "type": "string" },
+        "fontHeading": { "type": "string" },
+        "baseFontSize": { "type": "string" },
+        "adminEmail": { "type": "string" }
+      }
+    }
+  },
+  "firestore": {
+    "schools": {
+      "schema": "School",
+      "description": "Collection of schools."
+    },
+    "resources": {
+      "schema": "Resource",
+      "description": "Collection of resources."
+    },
+    "news": {
+      "schema": "News",
+      "description": "Collection of news items."
+    },
+    "config": {
+      "schema": "SiteConfig",
+      "description": "Singleton or small collection for site configuration."
+    }
+  }
+}

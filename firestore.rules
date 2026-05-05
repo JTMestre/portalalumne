@@ -1,0 +1,86 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // AUTH HELPERS
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    function isAdmin() {
+      return isSignedIn() && (
+        request.auth.token.email == 'hylomi3ia@gmail.com' ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+    
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // ENTITY VALIDATION HELPERS
+    function isValidSchool(data) {
+      return data.keys().hasAll(['name', 'slug']) &&
+             data.name is string && data.name.size() <= 100 &&
+             data.slug is string && data.slug.size() <= 50;
+    }
+
+    function isValidResource(data) {
+      return data.keys().hasAll(['schoolId', 'title', 'type']) &&
+             data.schoolId is string &&
+             data.title is string && data.title.size() <= 200 &&
+             data.type in ['video', 'game', 'doc', 'link', 'kahoot', 'html'] &&
+             (data.type == 'html' ? (data.content is string) : (data.url is string && data.url.size() <= 1000));
+    }
+
+    function isValidNews(data) {
+      return data.keys().hasAll(['title', 'content']) &&
+             data.title is string && data.title.size() <= 200 &&
+             data.content is string;
+    }
+
+    function isValidConfig(data) {
+      return true; // Config is flexible for admin
+    }
+
+    // SCHOOLS
+    match /schools/{schoolId} {
+      allow read: if true;
+      allow create: if isAdmin() && isValidSchool(request.resource.data);
+      allow update: if isAdmin() && isValidSchool(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    // RESOURCES
+    match /resources/{resourceId} {
+      allow read: if true;
+      allow create: if isAdmin() && isValidResource(request.resource.data);
+      allow update: if isAdmin() && isValidResource(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    // NEWS
+    match /news/{newsId} {
+      allow read: if true;
+      allow create: if isAdmin() && isValidNews(request.resource.data);
+      allow update: if isAdmin() && isValidNews(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    // CONFIG
+    match /config/{configId} {
+      allow read: if true;
+      allow write: if isAdmin() && isValidConfig(request.resource.data);
+    }
+    
+    // ADMINS (Static list or managed)
+    match /admins/{userId} {
+      allow read: if isSignedIn();
+      allow write: if false; // Only manageable via console or higher logic
+    }
+  }
+}

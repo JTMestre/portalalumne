@@ -14,13 +14,7 @@ service cloud.firestore {
     function isAdmin() {
       return isSignedIn() && (
         request.auth.token.email == 'hylomi3ia@gmail.com' ||
-        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
-        // Check if there is an admin document where the email field matches
-        // Note: This is an expensive query if not done by ID, so we'll 
-        // advise the user that the first admin (hardcoded) must add others.
-        // Actually, for simplicity in rules, let's allow read for admins 
-        // and let the client handle the list if they are in it.
-        false
+        exists(/databases/$(database)/documents/admins/$(request.auth.token.email))
       );
     }
     
@@ -32,7 +26,7 @@ service cloud.firestore {
     function isValidSchool(data) {
       return data.keys().hasAll(['name', 'slug']) &&
              data.name is string && data.name.size() <= 100 &&
-             data.slug is string && data.slug.size() <= 50;
+             data.slug is string && data.slug.size() <= 500; // slug can be longer if needed
     }
 
     function isValidResource(data) {

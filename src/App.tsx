@@ -868,23 +868,38 @@ function ConfigManager({ config }: { config: SiteConfig | null }) {
 
 // Schools Manager
 function SchoolsManager({ schools }: { schools: School[] }) {
-  const [newSchoolName, setNewSchoolName] = useState('');
+  const [isAdding, setIsAdding] = useState(false);
+  const [editingSchool, setEditingSchool] = useState<School | null>(null);
+  const [formData, setFormData] = useState<Partial<School>>({ name: '', logo: '', cover: '' });
   
   const handleAdd = async () => {
-    if (!newSchoolName) return;
+    if (!formData.name) return;
     try {
       await addDoc(collection(db, 'schools'), {
-        name: newSchoolName,
-        slug: newSchoolName.toLowerCase().replace(/ /g, '-'),
+        ...formData,
+        slug: formData.name.toLowerCase().replace(/ /g, '-'),
         order: schools.length
       });
-      setNewSchoolName('');
+      setFormData({ name: '', logo: '', cover: '' });
+      setIsAdding(false);
     } catch (e) {
       handleFirestoreError(e, OperationType.CREATE, 'schools');
     }
   };
 
+  const handleUpdate = async () => {
+    if (!editingSchool || !formData.name) return;
+    try {
+      await updateDoc(doc(db, 'schools', editingSchool.id), formData);
+      setEditingSchool(null);
+      setFormData({ name: '', logo: '', cover: '' });
+    } catch (e) {
+      handleFirestoreError(e, OperationType.UPDATE, `schools/${editingSchool.id}`);
+    }
+  };
+
   const handleDelete = async (id: string) => {
+    if (!confirm('Segur que vols eliminar aquesta escola?')) return;
     try {
       await deleteDoc(doc(db, 'schools', id));
     } catch (e) {
@@ -892,41 +907,80 @@ function SchoolsManager({ schools }: { schools: School[] }) {
     }
   };
 
+  const startEdit = (s: School) => {
+    setEditingSchool(s);
+    setFormData({ name: s.name, logo: s.logo, cover: s.cover });
+    setIsAdding(false);
+  };
+
   return (
     <div className="space-y-6">
-      <div className="flex gap-4 mb-8">
-        <input 
-          type="text" 
-          value={newSchoolName}
-          onChange={e => setNewSchoolName(e.target.value)}
-          placeholder="Nom de la nova escola..."
-          className="flex-1 px-6 py-4 bg-white border border-neutral-200 rounded-2xl text-lg outline-none focus:border-primary transition-colors"
-        />
-        <button onClick={handleAdd} className="px-8 py-4 bg-neutral-900 text-white rounded-2xl font-bold flex items-center gap-2 hover:bg-neutral-800">
-          <Plus size={20} /> Afegir Escola
-        </button>
+      <div className="flex items-center justify-between mb-8">
+        <h3 className="text-xl font-bold">Llistat d'Escoles</h3>
+        {!isAdding && !editingSchool && (
+          <button onClick={() => setIsAdding(true)} className="px-6 py-3 bg-primary text-white rounded-xl font-bold text-sm flex items-center gap-2">
+            <Plus size={18}/> Nova Escola
+          </button>
+        )}
       </div>
+
+      {(isAdding || editingSchool) && (
+        <div className="bg-white p-8 rounded-3xl shadow-lg border border-primary/20 space-y-6 mb-12">
+          <h4 className="text-lg font-bold">{editingSchool ? 'Editar Escola' : 'Afegir Nova Escola'}</h4>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <Input label="Nom de l'Escola" value={formData.name} onChange={v => setFormData({...formData, name: v})} />
+            <Input label="URL del Logo (Opcional)" value={formData.logo} onChange={v => setFormData({...formData, logo: v})} />
+            <div className="md:col-span-2">
+              <Input label="URL de Fons / Cover (Opcional)" value={formData.cover} onChange={v => setFormData({...formData, cover: v})} />
+            </div>
+          </div>
+          <div className="flex gap-4 pt-4">
+            <button 
+              onClick={editingSchool ? handleUpdate : handleAdd} 
+              className="flex-1 py-4 bg-primary text-white rounded-2xl font-bold transition-all active:scale-95"
+            >
+              {editingSchool ? 'Guardar Canvis' : 'Crear Escola'}
+            </button>
+            <button 
+              onClick={() => { setIsAdding(false); setEditingSchool(null); setFormData({ name: '', logo: '', cover: '' }); }} 
+              className="px-10 py-4 bg-neutral-100 text-neutral-600 rounded-2xl font-bold transition-all active:scale-95"
+            >
+              Cancel·lar
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="space-y-4">
         {schools.map(s => (
           <div key={s.id} className="bg-white p-6 rounded-[2rem] border border-neutral-100 flex items-center justify-between group shadow-sm hover:shadow-md transition-all">
              <div className="flex items-center gap-4">
-               <div className="w-12 h-12 bg-neutral-50 rounded-xl flex items-center justify-center border border-neutral-100">
-                 <Building2 size={20} className="text-neutral-400" />
+               <div className="w-12 h-12 bg-neutral-50 rounded-xl flex items-center justify-center border border-neutral-100 overflow-hidden p-2">
+                 {s.logo ? (
+                   <img src={s.logo} className="w-full h-full object-contain" alt="" referrerPolicy="no-referrer" />
+                 ) : (
+                   <Building2 size={20} className="text-neutral-400" />
+                 )}
                </div>
-               <span className="text-xl font-bold">{s.name}</span>
+               <span className="text-xl font-bold text-slate-800">{s.name}</span>
              </div>
              <div className="flex items-center gap-2">
-               <button type="button" className="p-3 bg-neutral-50 hover:bg-neutral-100 rounded-xl transition-colors"><Edit size={18}/></button>
+               <button 
+                 type="button" 
+                 onClick={() => startEdit(s)}
+                 className="p-4 bg-slate-50 text-slate-400 hover:text-primary hover:bg-primary/5 rounded-2xl transition-all"
+               >
+                 <Edit size={20}/>
+               </button>
                <button 
                  type="button"
                  onClick={(e) => {
                    e.stopPropagation();
                    handleDelete(s.id);
                  }} 
-                 className="p-3 bg-red-50 text-red-600 hover:bg-red-100 rounded-xl transition-colors"
+                 className="p-4 bg-red-50 text-red-400 hover:text-red-600 hover:bg-red-100 rounded-2xl transition-all"
                 >
-                  <Trash2 size={18}/>
+                  <Trash2 size={20}/>
                 </button>
              </div>
           </div>
@@ -1010,6 +1064,7 @@ function NewsManager({ news, schools }: { news: News[]; schools: School[] }) {
 // Resources Manager
 function ResourcesManager({ resources, schools }: { resources: Resource[]; schools: School[] }) {
   const [isAdding, setIsAdding] = useState(false);
+  const [editingResource, setEditingResource] = useState<Resource | null>(null);
   const [formData, setFormData] = useState<Partial<Resource>>({ 
     title: '', 
     type: 'link', 
@@ -1030,11 +1085,32 @@ function ResourcesManager({ resources, schools }: { resources: Resource[]; schoo
         cycle: formData.cycle || 'GENERAL',
         createdAt: new Date()
       });
-      setFormData({ title: '', type: 'link', cycle: 'GENERAL', url: '', content: '', isVisible: true, thumbnail: '', schoolId: schools[0]?.id || '' });
-      setIsAdding(false);
+      resetForm();
     } catch (e) {
       handleFirestoreError(e, OperationType.CREATE, 'resources');
     }
+  };
+
+  const handleUpdate = async () => {
+    if (!editingResource || !formData.title || (!formData.url && formData.type !== 'html') || !formData.schoolId) return;
+    try {
+      await updateDoc(doc(db, 'resources', editingResource.id), formData);
+      resetForm();
+    } catch (e) {
+      handleFirestoreError(e, OperationType.UPDATE, `resources/${editingResource.id}`);
+    }
+  };
+
+  const resetForm = () => {
+    setFormData({ title: '', type: 'link', cycle: 'GENERAL', url: '', content: '', isVisible: true, thumbnail: '', schoolId: schools[0]?.id || '' });
+    setIsAdding(false);
+    setEditingResource(null);
+  };
+
+  const startEdit = (r: Resource) => {
+    setEditingResource(r);
+    setFormData({ ...r });
+    setIsAdding(false);
   };
 
   const toggleVisibility = async (resource: Resource) => {
@@ -1047,15 +1123,29 @@ function ResourcesManager({ resources, schools }: { resources: Resource[]; schoo
     }
   };
 
+  const handleDelete = async (id: string) => {
+    if (!confirm('Segur que vols eliminar aquest recurs?')) return;
+    try {
+      await deleteDoc(doc(db, 'resources', id));
+    } catch (e) {
+      handleFirestoreError(e, OperationType.DELETE, `resources/${id}`);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between mb-8">
         <h3 className="text-xl font-bold">Recursos per Escola</h3>
-        {!isAdding && <button onClick={() => setIsAdding(true)} className="px-6 py-3 bg-primary text-white rounded-xl font-bold text-sm">Nou Recurs</button>}
+        {!isAdding && !editingResource && (
+          <button onClick={() => setIsAdding(true)} className="px-6 py-3 bg-primary text-white rounded-xl font-bold text-sm flex items-center gap-2">
+            <Plus size={18}/> Nou Recurs
+          </button>
+        )}
       </div>
 
-      {isAdding && (
-        <div className="bg-white p-8 rounded-3xl shadow-lg border border-primary/20 space-y-6 mb-8">
+      {(isAdding || editingResource) && (
+        <div className="bg-white p-8 rounded-3xl shadow-lg border border-primary/20 space-y-6 mb-12">
+          <h4 className="text-lg font-bold">{editingResource ? 'Editar Recurs' : 'Afegir Nou Recurs'}</h4>
           <Input label="Títol del recurs" value={formData.title} onChange={v => setFormData({...formData, title: v})} />
           
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -1138,8 +1228,18 @@ function ResourcesManager({ resources, schools }: { resources: Resource[]; schoo
           <Input label="Descripció (opcional)" value={formData.description || ''} onChange={v => setFormData({...formData, description: v})} />
 
           <div className="flex gap-4">
-            <button onClick={handleAdd} className="flex-1 py-4 bg-primary text-white rounded-2xl font-bold">Afegir Recurs</button>
-            <button onClick={() => setIsAdding(false)} className="px-8 py-4 bg-neutral-100 rounded-2xl font-bold">Cancel·lar</button>
+            <button 
+              onClick={editingResource ? handleUpdate : handleAdd} 
+              className="flex-1 py-4 bg-primary text-white rounded-2xl font-bold transition-all active:scale-95"
+            >
+              {editingResource ? 'Guardar Canvis' : 'Afegir Recurs'}
+            </button>
+            <button 
+              onClick={resetForm} 
+              className="px-10 py-4 bg-neutral-100 text-neutral-600 rounded-2xl font-bold transition-all active:scale-95"
+            >
+              Cancel·lar
+            </button>
           </div>
         </div>
       )}
@@ -1189,14 +1289,17 @@ function ResourcesManager({ resources, schools }: { resources: Resource[]; schoo
                     {r.isVisible !== false ? <Eye size={18}/> : <EyeOff size={18}/>}
                   </button>
                   <button 
+                    type="button" 
+                    onClick={() => startEdit(r)}
+                    className="p-3 bg-slate-50 text-slate-400 hover:text-primary hover:bg-primary/5 rounded-xl transition-all"
+                  >
+                    <Edit size={18}/>
+                  </button>
+                  <button 
                     type="button"
-                    onClick={async (e) => {
+                    onClick={(e) => {
                       e.stopPropagation();
-                      try {
-                        await deleteDoc(doc(db, 'resources', r.id));
-                      } catch (e) {
-                        handleFirestoreError(e, OperationType.DELETE, `resources/${r.id}`);
-                      }
+                      handleDelete(r.id);
                     }} 
                     className="p-3 text-neutral-400 hover:text-red-600 transition-colors"
                   >
@@ -1218,9 +1321,10 @@ function AdminsManager({ admins }: { admins: AdminUser[] }) {
 
   const handleAdd = async () => {
     if (!email || !email.includes('@')) return;
+    const normalizedEmail = email.toLowerCase().trim();
     try {
-      await addDoc(collection(db, 'admins'), {
-        email: email.toLowerCase(),
+      await setDoc(doc(db, 'admins', normalizedEmail), {
+        email: normalizedEmail,
         addedAt: new Date()
       });
       setEmail('');

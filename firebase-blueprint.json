@@ -24,7 +24,7 @@
         "schoolId": { "type": "string" },
         "title": { "type": "string" },
         "description": { "type": "string" },
-        "type": { "type": "string", "enum": ["video", "game", "doc", "link", "kahoot", "html", "padlet", "genially", "canva", "timeline"] },
+        "type": { "type": "string", "enum": ["video", "game", "doc", "link", "kahoot", "html", "padlet", "genially", "canva", "timeline", "iframe"] },
         "cycle": { "type": "string", "enum": ["CI", "CM", "CS", "GENERAL"] },
         "url": { "type": "string" },
         "content": { "type": "string" },

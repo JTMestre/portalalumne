@@ -31,7 +31,8 @@ import {
   EyeOff,
   ArrowRight,
   ArrowUp,
-  ArrowDown
+  ArrowDown,
+  Monitor
 } from 'lucide-react';
 import { cn } from './lib/utils';
 
@@ -640,6 +641,7 @@ function ResourceCard({ resource, idx }: { resource: Resource; idx: number }) {
     link: <LinkIcon size={20}/>,
     kahoot: <div className="font-bold text-xs uppercase tracking-tighter">K</div>,
     html: <Code size={20}/>,
+    iframe: <Monitor size={20}/>,
     padlet: <Grid size={20}/>,
     genially: <Sparkles size={20}/>,
     canva: <Palette size={20}/>,
@@ -653,6 +655,7 @@ function ResourceCard({ resource, idx }: { resource: Resource; idx: number }) {
     link: 'bg-[#1e293b] text-white shadow-lg shadow-slate-500/20',   // Slate
     kahoot: 'bg-[#46178F] text-white shadow-lg shadow-purple-900/20',// Kahoot Purple
     html: 'bg-[#059669] text-white shadow-lg shadow-emerald-500/20', // Emerald
+    iframe: 'bg-[#3b82f6] text-white shadow-lg shadow-blue-500/20',  // Blue
     padlet: 'bg-[#FF4D4D] text-white shadow-lg shadow-pink-500/20',  // Padlet Pinkish
     genially: 'bg-[#00ACAC] text-white shadow-lg shadow-cyan-500/20',// Genially Cyan
     canva: 'bg-[#00C4CC] text-white shadow-lg shadow-blue-400/20',   // Canva Teal
@@ -661,10 +664,14 @@ function ResourceCard({ resource, idx }: { resource: Resource; idx: number }) {
 
   const [isOpen, setIsOpen] = useState(false);
 
-  // Bento logic: make some cards bigger if they have description and it's an even index
-  const isLarge = (resource.description && idx % 3 === 0) || resource.type === 'html';
+  // Types that open in a modal iframe
+  const embedTypes = ['html', 'iframe', 'genially', 'canva', 'padlet', 'timeline'];
+  const isEmbed = embedTypes.includes(resource.type);
 
-  if (resource.type === 'html') {
+  // Bento logic: make some cards bigger if they have description and it's an even index
+  const isLarge = (resource.description && idx % 3 === 0) || isEmbed;
+
+  if (isEmbed) {
     return (
       <>
         <motion.div
@@ -685,14 +692,17 @@ function ResourceCard({ resource, idx }: { resource: Resource; idx: number }) {
           
           <div className="flex items-start justify-between mb-8 relative z-10">
             <div className={cn("w-12 h-12 rounded-2xl flex items-center justify-center transition-transform group-hover:rotate-12", colors[resource.type])}>
-              {icons[resource.type]}
+              {icons[resource.type as keyof typeof icons]}
             </div>
             <div className="p-2 bg-slate-50/50 backdrop-blur rounded-xl opacity-0 group-hover:opacity-100 transition-opacity">
-              <ExternalLink size={16} className="text-slate-400" />
+              {resource.type === 'html' ? <Code size={16} className="text-slate-400" /> : <Monitor size={16} className="text-slate-400" />}
             </div>
           </div>
           
           <div className="flex-1 relative z-10">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-[9px] font-bold uppercase tracking-widest text-primary/60">{resource.type === 'html' ? 'Codi HTML' : 'Contingut Incrustat'}</span>
+            </div>
             <h3 className="text-xl font-bold mb-3 leading-tight group-hover:text-primary transition-colors">{resource.title}</h3>
             {resource.description && (
               <p className="text-slate-500 text-sm leading-relaxed mb-6 group-hover:text-slate-700 line-clamp-3">{resource.description}</p>
@@ -701,10 +711,9 @@ function ResourceCard({ resource, idx }: { resource: Resource; idx: number }) {
 
           <div className="mt-4 pt-6 border-t border-slate-50 flex items-center justify-between relative z-10">
             <div className="flex items-center gap-2">
-              <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">APP PERSONALITZADA</span>
-              <span className={cn("px-2 py-0.5 text-[9px] font-bold rounded-full uppercase tracking-wider", colors[resource.type])}>{resource.cycle || 'GENERAL'}</span>
+              <span className={cn("px-2 py-0.5 text-[9px] font-bold rounded-full uppercase tracking-wider", colors[resource.type as keyof typeof colors])}>{resource.cycle || 'GENERAL'}</span>
             </div>
-            <div className="text-[10px] font-bold text-primary opacity-0 group-hover:opacity-100 transition-opacity">OBRIR APP</div>
+            <div className="text-[10px] font-bold text-primary opacity-0 group-hover:opacity-100 transition-opacity">EXCUTAR / VEURE</div>
           </div>
         </motion.div>
 
@@ -716,14 +725,28 @@ function ResourceCard({ resource, idx }: { resource: Resource; idx: number }) {
                   <h2 className="text-3xl font-bold font-heading">{resource.title}</h2>
                   <p className="text-slate-400 text-sm">{resource.description}</p>
                 </div>
-                <button onClick={() => setIsOpen(false)} className="p-4 bg-white/10 hover:bg-white/20 rounded-2xl transition-all"><X /></button>
+                <div className="flex items-center gap-4">
+                  {resource.url && (
+                    <a 
+                      href={resource.url} 
+                      target="_blank" 
+                      rel="noopener noreferrer" 
+                      className="hidden md:flex items-center gap-2 px-6 py-3 bg-white/5 hover:bg-white/10 rounded-2xl text-xs font-bold transition-all"
+                    >
+                      <ExternalLink size={14} /> Obrir en pestanya nova
+                    </a>
+                  )}
+                  <button onClick={() => setIsOpen(false)} className="p-4 bg-white/10 hover:bg-white/20 rounded-2xl transition-all"><X /></button>
+                </div>
               </div>
               <div className="flex-1 bg-white rounded-3xl overflow-hidden shadow-2xl relative">
                 <iframe 
-                  srcDoc={resource.content}
+                  src={resource.type === 'html' ? undefined : resource.url}
+                  srcDoc={resource.type === 'html' ? resource.content : undefined}
                   className="w-full h-full border-none"
                   title={resource.title}
-                  sandbox="allow-scripts allow-forms allow-modals"
+                  sandbox="allow-scripts allow-forms allow-modals allow-same-origin allow-popups"
+                  referrerPolicy="no-referrer"
                 />
               </div>
             </div>
@@ -1379,6 +1402,7 @@ function ResourcesManager({ resources, schools }: { resources: Resource[]; schoo
                 onChange={e => setFormData({...formData, type: e.target.value as any})}
                 className="w-full p-4 bg-neutral-900 text-white border-2 border-primary/20 rounded-2xl outline-none focus:border-primary transition-all shadow-inner"
               >
+                <option value="iframe">🔗 Aplicació Externa (AI Studio, etc.)</option>
                 <option value="html">✨ Codi Personalitzat (HTML/JS)</option>
                 <option value="video">Vídéo (YouTube)</option>
                 <option value="genially">Genially</option>

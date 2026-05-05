@@ -1,4 +1,4 @@
-export type ResourceType = 'video' | 'game' | 'doc' | 'link' | 'kahoot' | 'html' | 'padlet' | 'genially' | 'canva' | 'timeline';
+export type ResourceType = 'video' | 'game' | 'doc' | 'link' | 'kahoot' | 'html' | 'padlet' | 'genially' | 'canva' | 'timeline' | 'iframe';
 
 export interface School {
   id: string;

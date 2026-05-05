@@ -669,7 +669,9 @@ function ResourceCard({ resource, idx }: { resource: Resource; idx: number }) {
   const isEmbed = embedTypes.includes(resource.type);
 
   // Bento logic: make some cards bigger if they have description and it's an even index
+  // Special types (html, iframe) are ALWAYS large to give them priority
   const isLarge = (resource.description && idx % 3 === 0) || isEmbed;
+  const isExtraLarge = resource.type === 'html' || resource.type === 'iframe' || resource.type === 'genially';
 
   if (isEmbed) {
     return (
@@ -680,18 +682,18 @@ function ResourceCard({ resource, idx }: { resource: Resource; idx: number }) {
            animate={{ opacity: 1, scale: 1 }}
            transition={{ delay: idx * 0.05 }}
            className={cn(
-             "bento-card p-8 flex flex-col group relative overflow-hidden cursor-pointer h-full",
-             isLarge ? "md:col-span-2 md:row-span-1" : "md:col-span-1"
+             "bento-card p-6 md:p-8 flex flex-col group relative overflow-hidden cursor-pointer h-full border-2 border-transparent hover:border-primary/20",
+             isExtraLarge ? "md:col-span-2 md:row-span-2" : (isLarge ? "md:col-span-2 md:row-span-1" : "md:col-span-1")
            )}
         >
           {resource.thumbnail && (
-            <div className="absolute inset-0 opacity-10 group-hover:opacity-20 transition-opacity">
+            <div className="absolute inset-0 opacity-10 group-hover:opacity-25 transition-opacity">
               <img src={resource.thumbnail} className="w-full h-full object-cover" alt="" referrerPolicy="no-referrer" />
             </div>
           )}
           
-          <div className="flex items-start justify-between mb-8 relative z-10">
-            <div className={cn("w-12 h-12 rounded-2xl flex items-center justify-center transition-transform group-hover:rotate-12", colors[resource.type])}>
+          <div className="flex items-start justify-between mb-6 md:mb-8 relative z-10">
+            <div className={cn("w-12 h-12 md:w-14 md:h-14 rounded-2xl flex items-center justify-center transition-transform group-hover:rotate-12", colors[resource.type as keyof typeof colors])}>
               {icons[resource.type as keyof typeof icons]}
             </div>
             <div className="p-2 bg-slate-50/50 backdrop-blur rounded-xl opacity-0 group-hover:opacity-100 transition-opacity">
@@ -701,11 +703,12 @@ function ResourceCard({ resource, idx }: { resource: Resource; idx: number }) {
           
           <div className="flex-1 relative z-10">
             <div className="flex items-center gap-2 mb-2">
-              <span className="text-[9px] font-bold uppercase tracking-widest text-primary/60">{resource.type === 'html' ? 'Codi HTML' : 'Contingut Incrustat'}</span>
+              <span className="text-[9px] font-bold uppercase tracking-widest text-primary/60">{resource.type === 'html' ? 'Aplicació Codi' : 'Contingut Incrustat'}</span>
+              {isExtraLarge && <span className="text-[9px] bg-primary/10 text-primary px-2 py-0.5 rounded-full font-bold">DESTACAT</span>}
             </div>
-            <h3 className="text-xl font-bold mb-3 leading-tight group-hover:text-primary transition-colors">{resource.title}</h3>
+            <h3 className={cn("font-bold mb-3 leading-tight group-hover:text-primary transition-colors", isExtraLarge ? "text-2xl md:text-3xl" : "text-xl")}>{resource.title}</h3>
             {resource.description && (
-              <p className="text-slate-500 text-sm leading-relaxed mb-6 group-hover:text-slate-700 line-clamp-3">{resource.description}</p>
+              <p className="text-slate-500 text-sm leading-relaxed mb-6 group-hover:text-slate-700 line-clamp-4">{resource.description}</p>
             )}
           </div>
 
@@ -713,33 +716,33 @@ function ResourceCard({ resource, idx }: { resource: Resource; idx: number }) {
             <div className="flex items-center gap-2">
               <span className={cn("px-2 py-0.5 text-[9px] font-bold rounded-full uppercase tracking-wider", colors[resource.type as keyof typeof colors])}>{resource.cycle || 'GENERAL'}</span>
             </div>
-            <div className="text-[10px] font-bold text-primary opacity-0 group-hover:opacity-100 transition-opacity">EXCUTAR / VEURE</div>
+            <div className="text-[10px] font-bold text-primary opacity-0 group-hover:opacity-100 transition-opacity uppercase tracking-wider">Obrir recurs</div>
           </div>
         </motion.div>
 
         <AnimatePresence>
           {isOpen && (
-            <div className="fixed inset-0 z-[200] bg-slate-900/95 backdrop-blur-sm flex flex-col p-2 md:p-6">
-              <div className="flex items-center justify-between mb-4 text-white px-2">
+            <div className="fixed inset-0 z-[200] bg-slate-900/98 backdrop-blur-md flex flex-col p-1 md:p-4">
+              <div className="flex items-center justify-between mb-2 md:mb-4 text-white px-4 py-2">
                 <div className="max-w-[70%]">
-                  <h2 className="text-2xl md:text-3xl font-bold font-heading line-clamp-1">{resource.title}</h2>
-                  <p className="text-slate-400 text-[10px] md:text-sm line-clamp-1">{resource.description}</p>
+                  <h2 className="text-xl md:text-2xl font-bold font-heading line-clamp-1">{resource.title}</h2>
+                  {resource.description && <p className="text-slate-400 text-[10px] md:text-xs line-clamp-1">{resource.description}</p>}
                 </div>
-                <div className="flex items-center gap-2 md:gap-4">
+                <div className="flex items-center gap-2">
                   {resource.url && (
                     <a 
                       href={resource.url} 
                       target="_blank" 
                       rel="noopener noreferrer" 
-                      className="hidden sm:flex items-center gap-2 px-4 md:px-6 py-2 md:py-3 bg-white/10 hover:bg-white/20 rounded-2xl text-[10px] md:text-xs font-bold transition-all border border-white/10"
+                      className="hidden sm:flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 rounded-xl text-[10px] font-bold transition-all border border-white/10"
                     >
-                      <ExternalLink size={14} /> Obrir
+                      <ExternalLink size={14} /> Pantalla completa
                     </a>
                   )}
-                  <button onClick={() => setIsOpen(false)} className="p-3 md:p-4 bg-white/10 hover:bg-white/20 rounded-2xl transition-all"><X /></button>
+                  <button onClick={() => setIsOpen(false)} className="p-2 md:p-3 bg-red-500/20 hover:bg-red-500/40 text-red-200 rounded-xl transition-all border border-red-500/20"><X size={20} /></button>
                 </div>
               </div>
-              <div className="flex-1 bg-white rounded-xl md:rounded-3xl overflow-hidden shadow-2xl relative">
+              <div className="flex-1 bg-white rounded-lg md:rounded-2xl overflow-hidden shadow-2xl relative w-full h-full">
                 <iframe 
                   src={resource.type === 'html' ? undefined : resource.url}
                   srcDoc={resource.type === 'html' ? resource.content : undefined}

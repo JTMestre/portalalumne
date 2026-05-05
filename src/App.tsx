@@ -387,9 +387,9 @@ function Navbar({ onOpenAdmin }: { onOpenAdmin: () => void }) {
 function Home() {
   const { config, news, schools, resources, setActiveSchoolId } = useApp();
 
-  // Get 6 most recent visible resources
+  // Get 6 most recent visible resources that belong to active schools
   const recentResources = [...resources]
-    .filter(r => r.isVisible !== false)
+    .filter(r => r.isVisible !== false && schools.some(s => s.id === r.schoolId))
     .sort((a, b) => {
       const dateA = a.createdAt?.seconds || 0;
       const dateB = b.createdAt?.seconds || 0;
@@ -494,7 +494,7 @@ function Home() {
 
         {/* News Grid Section */}
         <div className="md:col-span-12 grid grid-cols-1 md:grid-cols-3 gap-6">
-          {news.filter(n => n.isVisible !== false).slice(0, 3).map((item, idx) => (
+          {news.filter(n => n.isVisible !== false && (!n.schoolId || schools.some(s => s.id === n.schoolId))).slice(0, 3).map((item, idx) => (
             <motion.div 
               key={item.id}
               initial={{ opacity: 0, y: 20 }}
@@ -1444,20 +1444,87 @@ function ResourcesManager({ resources, schools }: { resources: Resource[]; schoo
         </div>
       )}
 
-      {schools.map(s => (
-        <div key={s.id} className="mb-10">
-          <h4 className="text-sm font-bold uppercase tracking-widest text-neutral-400 mb-4 flex items-center gap-2">
-            <Building2 size={14}/> {s.name}
-          </h4>
-          <div className="space-y-3">
-            {resources.filter(r => r.schoolId === s.id).map(r => (
-              <div key={r.id} className="bg-white p-4 rounded-2xl border border-neutral-100 flex items-center justify-between group transition-shadow hover:shadow-sm">
-                <div className="flex items-center gap-3">
-                  <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center overflow-hidden", r.thumbnail ? "p-0" : "bg-neutral-50")}>
-                    {r.thumbnail ? (
-                      <img src={r.thumbnail} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                    ) : (
-                      <div className="text-neutral-300">
+      <div className="space-y-12">
+        {schools.map(s => (
+          <div key={s.id}>
+            <h4 className="text-sm font-bold uppercase tracking-widest text-neutral-400 mb-4 flex items-center gap-2 px-2">
+              <Building2 size={14}/> {s.name}
+            </h4>
+            <div className="space-y-3">
+              {resources.filter(r => r.schoolId === s.id).map(r => (
+                <div key={r.id} className="bg-white p-4 rounded-2xl border border-neutral-100 flex items-center justify-between group transition-shadow hover:shadow-sm">
+                  <div className="flex items-center gap-3">
+                    <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center overflow-hidden", r.thumbnail ? "p-0" : "bg-neutral-50")}>
+                      {r.thumbnail ? (
+                        <img src={r.thumbnail} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                      ) : (
+                        <div className="text-neutral-300">
+                          {r.type === 'video' && <Youtube size={16}/>}
+                          {r.type === 'game' && <Gamepad2 size={16}/>}
+                          {r.type === 'kahoot' && <div className="font-bold text-[10px]">K</div>}
+                          {r.type === 'doc' && <FileText size={16}/>}
+                          {r.type === 'link' && <LinkIcon size={16}/>}
+                          {r.type === 'html' && <Code size={16}/>}
+                        </div>
+                      )}
+                    </div>
+                    <div>
+                      <span className="font-bold block">{r.title}</span>
+                      <div className="flex items-center gap-2">
+                         <span className="text-[10px] text-neutral-400 font-medium uppercase">{r.type}</span>
+                         {r.cycle && <span className="text-[9px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-full font-bold">{r.cycle}</span>}
+                         {r.isVisible === false && <span className="text-[9px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded-full font-bold">OCULT</span>}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button 
+                      type="button"
+                      onClick={() => toggleVisibility(r)}
+                      className={cn(
+                        "p-3 rounded-xl transition-all",
+                        r.isVisible !== false ? "text-emerald-500 bg-emerald-50" : "text-neutral-300 hover:text-neutral-600"
+                      )}
+                      title={r.isVisible !== false ? "Visible" : "Ocult"}
+                    >
+                      {r.isVisible !== false ? <Eye size={18}/> : <EyeOff size={18}/>}
+                    </button>
+                    <button 
+                      type="button" 
+                      onClick={() => startEdit(r)}
+                      className="p-3 bg-slate-50 text-slate-400 hover:text-primary hover:bg-primary/5 rounded-xl transition-all"
+                    >
+                      <Edit size={18}/>
+                    </button>
+                    <button 
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDelete(r.id);
+                      }} 
+                      className="p-3 text-neutral-400 hover:text-red-600 transition-colors"
+                    >
+                      <Trash2 size={18} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+
+        {/* Orphaned resources */}
+        {resources.filter(r => !schools.some(s => s.id === r.schoolId)).length > 0 && (
+          <div className="pt-8 border-t border-dashed border-neutral-200">
+            <h4 className="text-sm font-bold uppercase tracking-widest text-red-400 mb-4 flex items-center gap-2 px-2">
+              <X size={14}/> Recursos sense escola (Orfes)
+            </h4>
+            <div className="space-y-3">
+              {resources.filter(r => !schools.some(s => s.id === r.schoolId)).map(r => (
+                <div key={r.id} className="bg-red-50/30 p-4 rounded-2xl border border-red-100 flex items-center justify-between group">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center text-red-200 border border-red-50">
+                      <div className="text-red-300">
                         {r.type === 'video' && <Youtube size={16}/>}
                         {r.type === 'game' && <Gamepad2 size={16}/>}
                         {r.type === 'kahoot' && <div className="font-bold text-[10px]">K</div>}
@@ -1465,52 +1532,25 @@ function ResourcesManager({ resources, schools }: { resources: Resource[]; schoo
                         {r.type === 'link' && <LinkIcon size={16}/>}
                         {r.type === 'html' && <Code size={16}/>}
                       </div>
-                    )}
-                  </div>
-                  <div>
-                    <span className="font-bold block">{r.title}</span>
-                    <div className="flex items-center gap-2">
-                       <span className="text-[10px] text-neutral-400 font-medium uppercase">{r.type}</span>
-                       {r.cycle && <span className="text-[9px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-full font-bold">{r.cycle}</span>}
-                       {r.isVisible === false && <span className="text-[9px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded-full font-bold">OCULT</span>}
+                    </div>
+                    <div>
+                      <span className="font-bold block text-red-900/60">{r.title}</span>
+                      <p className="text-[10px] text-red-400 font-bold uppercase tracking-tighter">Aquesta escola ja no existeix</p>
                     </div>
                   </div>
-                </div>
-                <div className="flex items-center gap-2">
                   <button 
                     type="button"
-                    onClick={() => toggleVisibility(r)}
-                    className={cn(
-                      "p-3 rounded-xl transition-all",
-                      r.isVisible !== false ? "text-emerald-500 bg-emerald-50" : "text-neutral-300 hover:text-neutral-600"
-                    )}
-                    title={r.isVisible !== false ? "Visible" : "Ocult"}
-                  >
-                    {r.isVisible !== false ? <Eye size={18}/> : <EyeOff size={18}/>}
-                  </button>
-                  <button 
-                    type="button" 
-                    onClick={() => startEdit(r)}
-                    className="p-3 bg-slate-50 text-slate-400 hover:text-primary hover:bg-primary/5 rounded-xl transition-all"
-                  >
-                    <Edit size={18}/>
-                  </button>
-                  <button 
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDelete(r.id);
-                    }} 
-                    className="p-3 text-neutral-400 hover:text-red-600 transition-colors"
+                    onClick={() => handleDelete(r.id)} 
+                    className="p-3 text-red-300 hover:text-red-600 hover:bg-red-100 rounded-xl transition-all"
                   >
                     <Trash2 size={18} />
                   </button>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
-        </div>
-      ))}
+        )}
+      </div>
     </div>
   );
 }

@@ -1,4 +1,4 @@
-export type ResourceType = 'video' | 'game' | 'doc' | 'link' | 'kahoot' | 'html';
+export type ResourceType = 'video' | 'game' | 'doc' | 'link' | 'kahoot' | 'html' | 'padlet' | 'genially' | 'canva' | 'timeline';
 
 export interface School {
   id: string;
@@ -9,16 +9,27 @@ export interface School {
   order?: number;
 }
 
+export type Cycle = 'CI' | 'CM' | 'CS' | 'GENERAL';
+
 export interface Resource {
   id: string;
   schoolId: string;
   title: string;
   description?: string;
   type: ResourceType;
+  cycle: Cycle;
   url: string;
   content?: string; // For HTML/JS code
   thumbnail?: string;
+  isVisible?: boolean;
   createdAt: any;
+}
+
+export interface AdminUser {
+  id: string;
+  email: string;
+  name?: string;
+  addedAt: any;
 }
 
 export interface News {

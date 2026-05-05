@@ -21,7 +21,15 @@ import {
   FileText,
   Link as LinkIcon,
   MessageSquare,
-  Code
+  Code,
+  Grid,
+  Sparkles,
+  Palette,
+  Clock,
+  Users,
+  Eye,
+  EyeOff,
+  ArrowRight
 } from 'lucide-react';
 import { cn } from './lib/utils';
 
@@ -33,9 +41,11 @@ interface AppContextType {
   schools: School[];
   news: News[];
   resources: Resource[];
+  admins: AdminUser[];
   loading: boolean;
   activeSchoolId: string | null;
   setActiveSchoolId: (id: string | null) => void;
+  handleLogin: () => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | null>(null);
@@ -53,6 +63,7 @@ export default function App() {
   const [schools, setSchools] = useState<School[]>([]);
   const [news, setNews] = useState<News[]>([]);
   const [resources, setResources] = useState<Resource[]>([]);
+  const [admins, setAdmins] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeSchoolId, setActiveSchoolId] = useState<string | null>(null);
   const [isAdminPanelOpen, setIsAdminPanelOpen] = useState(false);
@@ -60,8 +71,9 @@ export default function App() {
   useEffect(() => {
     const unsubAuth = onAuthStateChanged(auth, (u) => {
       setUser(u);
-      // Hardcoded admin check from instruction Email
-      setIsAdmin(u?.email === 'hylomi3ia@gmail.com');
+      // Hardcoded admin check from instruction Email + Dynamic check
+      const isCollectionAdmin = admins.some(a => a.email.toLowerCase() === u?.email?.toLowerCase());
+      setIsAdmin(u?.email === 'hylomi3ia@gmail.com' || isCollectionAdmin);
     });
 
     // Subscriptions
@@ -101,6 +113,11 @@ export default function App() {
       setResources(data);
     }, (err) => handleFirestoreError(err, OperationType.GET, 'resources'));
 
+    const unsubAdmins = onSnapshot(collection(db, 'admins'), (snapshot) => {
+      const data = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as AdminUser));
+      setAdmins(data);
+    }, (err) => handleFirestoreError(err, OperationType.GET, 'admins'));
+
     setLoading(false);
     return () => {
       unsubAuth();
@@ -108,6 +125,7 @@ export default function App() {
       unsubSchools();
       unsubNews();
       unsubResources();
+      unsubAdmins();
     };
   }, []);
 
@@ -141,52 +159,67 @@ export default function App() {
 
   useEffect(() => {
     if (isAdmin && !loading) {
-      // 1. Bootstrap School
-      if (schools.length === 0) {
-        const bootstrapSchool = async () => {
+      // Only bootstrap if the schools collection is truly empty and we haven't tried yet this session
+      const bootstraped = sessionStorage.getItem('portal_bootstrapped');
+      
+      if (schools.length === 0 && !bootstraped) {
+        const bootstrapData = async () => {
           try {
+            sessionStorage.setItem('portal_bootstrapped', 'true');
             await addDoc(collection(db, 'schools'), {
               name: 'ZER Els Ceps',
               slug: 'zer-els-ceps',
               order: 0
             });
           } catch (e) {
-            console.error("Error bootstrapping school", e);
+            console.error("Error bootstrapping initial data", e);
           }
         };
-        bootstrapSchool();
+        bootstrapData();
       }
 
-      // 2. Bootstrap specific resource
+      // Bootstrap specific resource only if school exists but resource doesn't
       const zerSchool = schools.find(s => s.slug === 'zer-els-ceps');
-      if (zerSchool) {
-        const hasConsell = resources.some(r => r.schoolId === zerSchool.id && r.title === 'Consell Escolar');
-        if (!hasConsell) {
-          const bootstrapResource = async () => {
-            try {
-              await addDoc(collection(db, 'resources'), {
-                schoolId: zerSchool.id,
-                title: 'Consell Escolar',
-                description: 'Aplicació per a la gestió del Consell Escolar',
-                type: 'link',
-                url: 'https://ai.studio/apps/59657500-89ec-4663-b194-09199e8d17a4',
-                createdAt: new Date()
-              });
-            } catch (e) {
-              console.error("Error bootstrapping resource", e);
-            }
-          };
-          bootstrapResource();
-        }
+      if (zerSchool && resources.length === 0 && !bootstraped) {
+        const bootstrapResource = async () => {
+          try {
+            await addDoc(collection(db, 'resources'), {
+              schoolId: zerSchool.id,
+              title: 'Consell Escolar',
+              description: 'Aplicació per a la gestió del Consell Escolar',
+              type: 'link',
+              url: 'https://ai.studio/apps/59657500-89ec-4663-b194-09199e8d17a4',
+              createdAt: new Date()
+            });
+          } catch (e) {
+            console.error("Error bootstrapping resource", e);
+          }
+        };
+        bootstrapResource();
       }
     }
-  }, [isAdmin, schools, resources, loading]);
+  }, [isAdmin, schools.length, resources.length, loading]);
 
-  if (loading) return <div className="flex h-screen items-center justify-center font-heading font-bold text-primary animate-pulse">Carregant Portal Docent...</div>;
+  const handleLogin = async () => {
+    try {
+      await login();
+    } catch (error: any) {
+      console.error("Login error:", error);
+      if (error.code === 'auth/popup-blocked') {
+        alert("El navegador ha bloquejat la finestra de login. Si us plau, obre l'aplicació en una pestanya nova o permet els popups.");
+      } else if (error.code === 'auth/unauthorized-domain') {
+        alert("Aquest domini no està autoritzat a Firebase. Si us plau, afegeix aquest domini a la llista de dominis autoritzats de Firebase (Consola > Authentication > Settings). Domain: " + window.location.hostname);
+      } else {
+        alert("Error de login: " + error.message);
+      }
+    }
+  };
+
+  if (loading) return <div className="flex h-screen items-center justify-center font-heading font-bold text-primary animate-pulse italic">Iniciant sessió al Portal Docent v2.1...</div>;
 
   return (
     <AppContext.Provider value={{
-      user, isAdmin, config, schools, news, resources, loading, activeSchoolId, setActiveSchoolId
+      user, isAdmin, config, schools, news, resources, admins, loading, activeSchoolId, setActiveSchoolId, handleLogin
     }}>
       <div className="min-h-screen bg-slate-50 text-slate-900 select-none">
         <Navbar onOpenAdmin={() => setIsAdminPanelOpen(true)} />
@@ -211,7 +244,7 @@ export default function App() {
 
 // Navbar Component
 function Navbar({ onOpenAdmin }: { onOpenAdmin: () => void }) {
-  const { user, isAdmin, config, schools, setActiveSchoolId, activeSchoolId } = useApp();
+  const { user, isAdmin, config, schools, setActiveSchoolId, activeSchoolId, handleLogin } = useApp();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   return (
@@ -267,23 +300,23 @@ function Navbar({ onOpenAdmin }: { onOpenAdmin: () => void }) {
             </button>
           )}
 
-          {user ? (
-            <button 
-              onClick={logout}
-              className="flex items-center gap-2 px-4 py-2 hover:bg-neutral-100 rounded-lg text-sm font-medium text-neutral-600"
-            >
-              <LogOut size={18} />
-              <span className="hidden lg:inline">Sortir</span>
-            </button>
-          ) : (
-            <button 
-              onClick={login}
-              className="flex items-center gap-2 px-5 py-2.5 bg-neutral-900 text-white rounded-xl text-sm font-medium hover:bg-neutral-800 transition-all active:scale-95"
-            >
-              <LogIn size={18} />
-              Entrar
-            </button>
-          )}
+            {user ? (
+              <button 
+                onClick={logout}
+                className="flex items-center gap-2 px-4 py-2 hover:bg-neutral-100 rounded-lg text-sm font-medium text-neutral-600"
+              >
+                <LogOut size={18} />
+                <span className="hidden lg:inline">Sortir</span>
+              </button>
+            ) : (
+              <button 
+                onClick={handleLogin}
+                className="flex items-center gap-2 px-5 py-2.5 bg-neutral-900 text-white rounded-xl text-sm font-medium hover:bg-neutral-800 transition-all active:scale-95"
+              >
+                <LogIn size={18} />
+                Entrar
+              </button>
+            )}
         </div>
 
         <button className="md:hidden p-2" onClick={() => setIsMenuOpen(!isMenuOpen)}>
@@ -329,7 +362,7 @@ function Navbar({ onOpenAdmin }: { onOpenAdmin: () => void }) {
                 <LogOut size={18} /> Sortir
               </button>
             ) : (
-              <button onClick={() => { login(); setIsMenuOpen(false); }} className="text-left py-3 px-4 rounded-lg hover:bg-neutral-50 font-medium text-primary flex items-center gap-2">
+              <button onClick={() => { handleLogin(); setIsMenuOpen(false); }} className="text-left py-3 px-4 rounded-lg hover:bg-neutral-50 font-medium text-primary flex items-center gap-2">
                 <LogIn size={18} /> Entrar
               </button>
             )}
@@ -451,10 +484,27 @@ function Home() {
 // School View Component
 function SchoolView({ schoolId }: { schoolId: string }) {
   const { schools, resources } = useApp();
+  const [activeCycle, setActiveCycle] = useState<Cycle | 'ALL'>('ALL');
   const school = schools.find(s => s.id === schoolId);
-  const schoolResources = resources.filter(r => r.schoolId === schoolId);
+  
+  const filteredResources = resources.filter(r => {
+    if (r.schoolId !== schoolId) return false;
+    // Hide invisible resources for non-admins (or just always hide for the view, 
+    // assuming the student view shouldn't see them)
+    if (r.isVisible === false) return false;
+    if (activeCycle === 'ALL') return true;
+    return r.cycle === activeCycle;
+  });
 
   if (!school) return null;
+
+  const cycles: { id: Cycle | 'ALL'; label: string }[] = [
+    { id: 'ALL', label: 'Tots' },
+    { id: 'CI', label: 'CI' },
+    { id: 'CM', label: 'CM' },
+    { id: 'CS', label: 'CS' },
+    { id: 'GENERAL', label: 'General' }
+  ];
 
   return (
     <motion.div 
@@ -477,22 +527,42 @@ function SchoolView({ schoolId }: { schoolId: string }) {
             <h1 className="text-5xl md:text-7xl font-bold font-heading mb-4 leading-none tracking-tighter">{school.name}</h1>
             <div className="flex flex-wrap justify-center md:justify-start gap-2">
               <span className="stat-chip">🏫 Educació Primària</span>
-              <span className="stat-chip bg-green-50 text-green-700">{schoolResources.length} Recursos Actius</span>
+              <span className="stat-chip bg-green-50 text-green-700">{filteredResources.length} Recursos Actius</span>
             </div>
           </div>
         </div>
 
+        {/* Cycle Filter */}
+        <div className="md:col-span-12 flex justify-center md:justify-start mb-2">
+          <div className="bg-white p-1.5 rounded-2xl border border-slate-200 flex gap-1 shadow-sm">
+            {cycles.map(cycle => (
+              <button
+                key={cycle.id}
+                onClick={() => setActiveCycle(cycle.id)}
+                className={cn(
+                  "px-6 py-2 rounded-xl text-xs font-bold uppercase tracking-widest transition-all",
+                  activeCycle === cycle.id 
+                    ? "bg-primary text-white shadow-lg shadow-primary/20" 
+                    : "text-slate-400 hover:text-slate-600 hover:bg-slate-50"
+                )}
+              >
+                {cycle.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
         {/* Resources Layout */}
-        {schoolResources.length > 0 ? (
+        {filteredResources.length > 0 ? (
           <div className="md:col-span-12 grid grid-cols-1 md:grid-cols-4 gap-6">
-            {schoolResources.map((res, idx) => (
+            {filteredResources.map((res, idx) => (
               <ResourceCard key={res.id} resource={res} idx={idx} />
             ))}
           </div>
         ) : (
           <div className="md:col-span-12 bento-card py-32 flex flex-col items-center justify-center text-center opacity-50 space-y-4">
             <div className="text-5xl">📂</div>
-            <p className="text-xl font-bold text-slate-400">Encara no s'han pujat recursos per a aquesta escola.</p>
+            <p className="text-xl font-bold text-slate-400">No hi ha recursos en aquesta categoria.</p>
           </div>
         )}
       </div>
@@ -507,16 +577,24 @@ function ResourceCard({ resource, idx }: { resource: Resource; idx: number }) {
     doc: <FileText size={20}/>,
     link: <LinkIcon size={20}/>,
     kahoot: <div className="font-bold text-xs uppercase tracking-tighter">K</div>,
-    html: <Code size={20}/>
+    html: <Code size={20}/>,
+    padlet: <Grid size={20}/>,
+    genially: <Sparkles size={20}/>,
+    canva: <Palette size={20}/>,
+    timeline: <Clock size={20}/>
   };
 
   const colors = {
-    video: 'bg-red-50 text-red-600',
-    game: 'bg-indigo-50 text-indigo-600',
-    doc: 'bg-blue-50 text-blue-600',
-    link: 'bg-slate-50 text-slate-600',
-    kahoot: 'bg-purple-600 text-white',
-    html: 'bg-emerald-50 text-emerald-600'
+    video: 'bg-[#FF0000] text-white shadow-lg shadow-red-500/20',     // YouTube Red
+    game: 'bg-[#764ABC] text-white shadow-lg shadow-indigo-500/20',   // Purple
+    doc: 'bg-[#2B579A] text-white shadow-lg shadow-blue-500/20',     // Word/Blue
+    link: 'bg-[#1e293b] text-white shadow-lg shadow-slate-500/20',   // Slate
+    kahoot: 'bg-[#46178F] text-white shadow-lg shadow-purple-900/20',// Kahoot Purple
+    html: 'bg-[#059669] text-white shadow-lg shadow-emerald-500/20', // Emerald
+    padlet: 'bg-[#FF4D4D] text-white shadow-lg shadow-pink-500/20',  // Padlet Pinkish
+    genially: 'bg-[#00ACAC] text-white shadow-lg shadow-cyan-500/20',// Genially Cyan
+    canva: 'bg-[#00C4CC] text-white shadow-lg shadow-blue-400/20',   // Canva Teal
+    timeline: 'bg-[#D97706] text-white shadow-lg shadow-amber-500/20'// Amber
   };
 
   const [isOpen, setIsOpen] = useState(false);
@@ -533,28 +611,37 @@ function ResourceCard({ resource, idx }: { resource: Resource; idx: number }) {
            animate={{ opacity: 1, scale: 1 }}
            transition={{ delay: idx * 0.05 }}
            className={cn(
-             "bento-card p-8 flex flex-col group relative overflow-hidden cursor-pointer",
+             "bento-card p-8 flex flex-col group relative overflow-hidden cursor-pointer h-full",
              isLarge ? "md:col-span-2 md:row-span-1" : "md:col-span-1"
            )}
         >
-          <div className="flex items-start justify-between mb-8">
+          {resource.thumbnail && (
+            <div className="absolute inset-0 opacity-10 group-hover:opacity-20 transition-opacity">
+              <img src={resource.thumbnail} className="w-full h-full object-cover" alt="" referrerPolicy="no-referrer" />
+            </div>
+          )}
+          
+          <div className="flex items-start justify-between mb-8 relative z-10">
             <div className={cn("w-12 h-12 rounded-2xl flex items-center justify-center transition-transform group-hover:rotate-12", colors[resource.type])}>
               {icons[resource.type]}
             </div>
-            <div className="p-2 bg-slate-50 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity">
+            <div className="p-2 bg-slate-50/50 backdrop-blur rounded-xl opacity-0 group-hover:opacity-100 transition-opacity">
               <ExternalLink size={16} className="text-slate-400" />
             </div>
           </div>
           
-          <div className="flex-1">
+          <div className="flex-1 relative z-10">
             <h3 className="text-xl font-bold mb-3 leading-tight group-hover:text-primary transition-colors">{resource.title}</h3>
             {resource.description && (
               <p className="text-slate-500 text-sm leading-relaxed mb-6 group-hover:text-slate-700 line-clamp-3">{resource.description}</p>
             )}
           </div>
 
-          <div className="mt-4 pt-6 border-t border-slate-50 flex items-center justify-between">
-            <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">APP PERSONALITZADA</span>
+          <div className="mt-4 pt-6 border-t border-slate-50 flex items-center justify-between relative z-10">
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">APP PERSONALITZADA</span>
+              <span className={cn("px-2 py-0.5 text-[9px] font-bold rounded-full uppercase tracking-wider", colors[resource.type])}>{resource.cycle || 'GENERAL'}</span>
+            </div>
             <div className="text-[10px] font-bold text-primary opacity-0 group-hover:opacity-100 transition-opacity">OBRIR APP</div>
           </div>
         </motion.div>
@@ -593,28 +680,37 @@ function ResourceCard({ resource, idx }: { resource: Resource; idx: number }) {
       animate={{ opacity: 1, scale: 1 }}
       transition={{ delay: idx * 0.05 }}
       className={cn(
-        "bento-card p-8 flex flex-col group relative overflow-hidden",
+        "bento-card p-8 flex flex-col group relative overflow-hidden h-full decoration-none",
         isLarge ? "md:col-span-2 md:row-span-1" : "md:col-span-1"
       )}
     >
-      <div className="flex items-start justify-between mb-8">
+      {resource.thumbnail && (
+        <div className="absolute inset-0 opacity-10 group-hover:opacity-20 transition-opacity pointer-events-none">
+          <img src={resource.thumbnail} className="w-full h-full object-cover" alt="" referrerPolicy="no-referrer" />
+        </div>
+      )}
+
+      <div className="flex items-start justify-between mb-8 relative z-10">
         <div className={cn("w-12 h-12 rounded-2xl flex items-center justify-center transition-transform group-hover:rotate-12", colors[resource.type])}>
           {icons[resource.type]}
         </div>
-        <div className="p-2 bg-slate-50 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity">
+        <div className="p-2 bg-slate-50/50 backdrop-blur rounded-xl opacity-0 group-hover:opacity-100 transition-opacity">
           <ExternalLink size={16} className="text-slate-400" />
         </div>
       </div>
       
-      <div className="flex-1">
+      <div className="flex-1 relative z-10">
         <h3 className="text-xl font-bold mb-3 leading-tight group-hover:text-primary transition-colors">{resource.title}</h3>
         {resource.description && (
           <p className="text-slate-500 text-sm leading-relaxed mb-6 group-hover:text-slate-700 line-clamp-3">{resource.description}</p>
         )}
       </div>
 
-      <div className="mt-4 pt-6 border-t border-slate-50 flex items-center justify-between">
-        <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">{resource.type}</span>
+      <div className="mt-4 pt-6 border-t border-slate-50 flex items-center justify-between relative z-10">
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">{resource.type}</span>
+          <span className={cn("px-2 py-0.5 text-[9px] font-bold rounded-full uppercase tracking-wider", colors[resource.type])}>{resource.cycle || 'GENERAL'}</span>
+        </div>
         <div className="text-[10px] font-bold text-primary opacity-0 group-hover:opacity-100 transition-opacity">OBRIR</div>
       </div>
     </motion.a>
@@ -624,8 +720,8 @@ function ResourceCard({ resource, idx }: { resource: Resource; idx: number }) {
 // ADMIN PANEL
 
 function AdminPanel({ onClose }: { onClose: () => void }) {
-  const { config, schools, news, resources } = useApp();
-  const [activeTab, setActiveTab] = useState<'config' | 'schools' | 'news' | 'resources'>('config');
+  const { config, schools, news, resources, admins } = useApp();
+  const [activeTab, setActiveTab] = useState<'config' | 'schools' | 'news' | 'resources' | 'admins'>('config');
 
   return (
     <div className="fixed inset-0 z-[100] bg-slate-900/40 backdrop-blur-md flex items-center justify-end p-4 md:p-6">
@@ -638,8 +734,8 @@ function AdminPanel({ onClose }: { onClose: () => void }) {
         {/* Sidebar Admin */}
         <aside className="w-full md:w-64 bg-[#1e293b] text-white p-8 flex flex-col border-r border-slate-700">
           <div className="mb-12">
-            <h1 className="text-2xl font-bold font-heading tracking-tighter mb-1">Portal Docent</h1>
-            <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Panell d'Administrador</p>
+            <h1 className="text-2xl font-bold font-heading tracking-tighter mb-1 text-emerald-400">Portal Admin</h1>
+            <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Identificat: {auth.currentUser?.email?.split('@')[0]}</p>
           </div>
 
           <nav className="flex-1 flex flex-col gap-6">
@@ -648,6 +744,7 @@ function AdminPanel({ onClose }: { onClose: () => void }) {
               <div className="space-y-1">
                 <TabButton active={activeTab === 'config'} onClick={() => setActiveTab('config')} label="Configuració" icon={<Settings size={18}/>} />
                 <TabButton active={activeTab === 'schools'} onClick={() => setActiveTab('schools')} label="Escoles" icon={<Building2 size={18}/>} />
+                <TabButton active={activeTab === 'admins'} onClick={() => setActiveTab('admins')} label="Administradors" icon={<Users size={18}/>} />
               </div>
             </div>
 
@@ -671,7 +768,24 @@ function AdminPanel({ onClose }: { onClose: () => void }) {
         </aside>
 
         {/* Content Area */}
-        <div className="flex-1 overflow-y-auto p-12 custom-scrollbar">
+        <div className="flex-1 overflow-y-auto p-12 custom-scrollbar relative">
+          <div className="mb-12 border-b border-slate-100 pb-8 flex items-center justify-between">
+            <div>
+              <h2 className="text-3xl font-heading font-bold text-slate-900">
+                {activeTab === 'config' && 'Configuració del Portal'}
+                {activeTab === 'schools' && 'Gestió d\'Escoles'}
+                {activeTab === 'news' && 'Notícies Recents'}
+                {activeTab === 'resources' && 'Biblioteca de Recursos'}
+                {activeTab === 'admins' && 'Administradors del Sistema'}
+              </h2>
+              <p className="text-slate-400 text-sm mt-1">Crea, edita o elimina elements del sistema.</p>
+            </div>
+            <div className="hidden md:flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-600 rounded-full text-[10px] font-bold uppercase tracking-widest">
+              <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-ping" />
+              Sessió Administrador
+            </div>
+          </div>
+
           <AnimatePresence mode="wait">
             <motion.div
               key={activeTab}
@@ -684,6 +798,7 @@ function AdminPanel({ onClose }: { onClose: () => void }) {
               {activeTab === 'schools' && <SchoolsManager schools={schools} />}
               {activeTab === 'news' && <NewsManager news={news} schools={schools} />}
               {activeTab === 'resources' && <ResourcesManager resources={resources} schools={schools} />}
+              {activeTab === 'admins' && <AdminsManager admins={admins} />}
             </motion.div>
           </AnimatePresence>
         </div>
@@ -895,19 +1010,40 @@ function NewsManager({ news, schools }: { news: News[]; schools: School[] }) {
 // Resources Manager
 function ResourcesManager({ resources, schools }: { resources: Resource[]; schools: School[] }) {
   const [isAdding, setIsAdding] = useState(false);
-  const [formData, setFormData] = useState<Partial<Resource>>({ title: '', type: 'link', url: '', content: '', schoolId: schools[0]?.id || '' });
+  const [formData, setFormData] = useState<Partial<Resource>>({ 
+    title: '', 
+    type: 'link', 
+    cycle: 'GENERAL',
+    url: '', 
+    content: '', 
+    isVisible: true,
+    thumbnail: '',
+    schoolId: schools[0]?.id || '' 
+  });
 
   const handleAdd = async () => {
     if (!formData.title || (!formData.url && formData.type !== 'html') || !formData.schoolId) return;
     try {
       await addDoc(collection(db, 'resources'), {
         ...formData,
+        isVisible: formData.isVisible !== false,
+        cycle: formData.cycle || 'GENERAL',
         createdAt: new Date()
       });
-      setFormData({ title: '', type: 'link', url: '', content: '', schoolId: schools[0]?.id || '' });
+      setFormData({ title: '', type: 'link', cycle: 'GENERAL', url: '', content: '', isVisible: true, thumbnail: '', schoolId: schools[0]?.id || '' });
       setIsAdding(false);
     } catch (e) {
       handleFirestoreError(e, OperationType.CREATE, 'resources');
+    }
+  };
+
+  const toggleVisibility = async (resource: Resource) => {
+    try {
+      await updateDoc(doc(db, 'resources', resource.id), {
+        isVisible: !resource.isVisible
+      });
+    } catch (e) {
+      handleFirestoreError(e, OperationType.UPDATE, `resources/${resource.id}`);
     }
   };
 
@@ -922,7 +1058,7 @@ function ResourcesManager({ resources, schools }: { resources: Resource[]; schoo
         <div className="bg-white p-8 rounded-3xl shadow-lg border border-primary/20 space-y-6 mb-8">
           <Input label="Títol del recurs" value={formData.title} onChange={v => setFormData({...formData, title: v})} />
           
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="space-y-1">
               <label className="text-xs font-bold uppercase tracking-wider text-neutral-400">Escola</label>
               <select 
@@ -934,6 +1070,19 @@ function ResourcesManager({ resources, schools }: { resources: Resource[]; schoo
               </select>
             </div>
             <div className="space-y-1">
+              <label className="text-xs font-bold uppercase tracking-wider text-neutral-400">Cicle</label>
+              <select 
+                value={formData.cycle} 
+                onChange={e => setFormData({...formData, cycle: e.target.value as any})}
+                className="w-full p-4 bg-neutral-50 border border-neutral-100 rounded-2xl outline-none"
+              >
+                <option value="GENERAL">General</option>
+                <option value="CI">CI (Cicle Inicial)</option>
+                <option value="CM">CM (Cicle Mitjà)</option>
+                <option value="CS">CS (Cicle Superior)</option>
+              </select>
+            </div>
+            <div className="space-y-1">
               <label className="text-xs font-bold uppercase tracking-wider text-neutral-400">Tipus</label>
               <select 
                 value={formData.type} 
@@ -942,6 +1091,10 @@ function ResourcesManager({ resources, schools }: { resources: Resource[]; schoo
               >
                 <option value="html">✨ Codi Personalitzat (HTML/JS)</option>
                 <option value="video">Vídéo (YouTube)</option>
+                <option value="genially">Genially</option>
+                <option value="canva">Canva</option>
+                <option value="padlet">Padlet</option>
+                <option value="timeline">Línia del Temps</option>
                 <option value="game">Joc / Itch.io</option>
                 <option value="kahoot">Kahoot</option>
                 <option value="doc">Document / PDF</option>
@@ -962,10 +1115,27 @@ function ResourcesManager({ resources, schools }: { resources: Resource[]; schoo
               <p className="text-[10px] text-slate-400 mt-2 italic">* Pots enganxar el codi sencer d'una aplicació interactiva.</p>
             </div>
           ) : (
-            <Input label="URL (YouTube, Itch, etc.)" value={formData.url} onChange={v => setFormData({...formData, url: v})} />
+            <Input label="URL (YouTube, Itch, etc.)" value={formData.url || ''} onChange={v => setFormData({...formData, url: v})} />
           )}
 
-          <Input label="Descripció (opcional)" value={formData.description} onChange={v => setFormData({...formData, description: v})} />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <Input label="URL de la Miniatura (Opcional)" value={formData.thumbnail || ''} onChange={v => setFormData({...formData, thumbnail: v})} />
+            <div className="flex items-center gap-4 p-4 bg-neutral-50 rounded-2xl border border-neutral-100">
+               <span className="text-sm font-bold text-neutral-600 flex-1">Recurs Visible</span>
+               <button 
+                 type="button"
+                 onClick={() => setFormData({...formData, isVisible: !formData.isVisible})}
+                 className={cn(
+                   "w-12 h-6 rounded-full transition-all relative border border-slate-200",
+                   formData.isVisible !== false ? "bg-primary" : "bg-neutral-300"
+                 )}
+               >
+                 <div className={cn("absolute top-0.5 w-4.5 h-4.5 bg-white rounded-full transition-all shadow-sm", formData.isVisible !== false ? "right-0.5" : "left-0.5")} />
+               </button>
+            </div>
+          </div>
+
+          <Input label="Descripció (opcional)" value={formData.description || ''} onChange={v => setFormData({...formData, description: v})} />
 
           <div className="flex gap-4">
             <button onClick={handleAdd} className="flex-1 py-4 bg-primary text-white rounded-2xl font-bold">Afegir Recurs</button>
@@ -983,38 +1153,135 @@ function ResourcesManager({ resources, schools }: { resources: Resource[]; schoo
             {resources.filter(r => r.schoolId === s.id).map(r => (
               <div key={r.id} className="bg-white p-4 rounded-2xl border border-neutral-100 flex items-center justify-between group transition-shadow hover:shadow-sm">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-neutral-50 rounded-lg flex items-center justify-center text-neutral-300">
-                    {r.type === 'video' && <Youtube size={16}/>}
-                    {r.type === 'game' && <Gamepad2 size={16}/>}
-                    {r.type === 'kahoot' && <div className="font-bold text-[10px]">K</div>}
-                    {r.type === 'doc' && <FileText size={16}/>}
-                    {r.type === 'link' && <LinkIcon size={16}/>}
-                    {r.type === 'html' && <Code size={16}/>}
+                  <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center overflow-hidden", r.thumbnail ? "p-0" : "bg-neutral-50")}>
+                    {r.thumbnail ? (
+                      <img src={r.thumbnail} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                    ) : (
+                      <div className="text-neutral-300">
+                        {r.type === 'video' && <Youtube size={16}/>}
+                        {r.type === 'game' && <Gamepad2 size={16}/>}
+                        {r.type === 'kahoot' && <div className="font-bold text-[10px]">K</div>}
+                        {r.type === 'doc' && <FileText size={16}/>}
+                        {r.type === 'link' && <LinkIcon size={16}/>}
+                        {r.type === 'html' && <Code size={16}/>}
+                      </div>
+                    )}
                   </div>
                   <div>
                     <span className="font-bold block">{r.title}</span>
-                    <span className="text-[10px] text-neutral-400 font-medium uppercase">{r.type}</span>
+                    <div className="flex items-center gap-2">
+                       <span className="text-[10px] text-neutral-400 font-medium uppercase">{r.type}</span>
+                       {r.cycle && <span className="text-[9px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-full font-bold">{r.cycle}</span>}
+                       {r.isVisible === false && <span className="text-[9px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded-full font-bold">OCULT</span>}
+                    </div>
                   </div>
                 </div>
-                <button 
-                  type="button"
-                  onClick={async (e) => {
-                    e.stopPropagation();
-                    try {
-                      await deleteDoc(doc(db, 'resources', r.id));
-                    } catch (e) {
-                      handleFirestoreError(e, OperationType.DELETE, `resources/${r.id}`);
-                    }
-                  }} 
-                  className="p-2 text-neutral-400 hover:text-red-600 transition-colors"
-                >
-                  <Trash2 size={18} />
-                </button>
+                <div className="flex items-center gap-2">
+                  <button 
+                    type="button"
+                    onClick={() => toggleVisibility(r)}
+                    className={cn(
+                      "p-3 rounded-xl transition-all",
+                      r.isVisible !== false ? "text-emerald-500 bg-emerald-50" : "text-neutral-300 hover:text-neutral-600"
+                    )}
+                    title={r.isVisible !== false ? "Visible" : "Ocult"}
+                  >
+                    {r.isVisible !== false ? <Eye size={18}/> : <EyeOff size={18}/>}
+                  </button>
+                  <button 
+                    type="button"
+                    onClick={async (e) => {
+                      e.stopPropagation();
+                      try {
+                        await deleteDoc(doc(db, 'resources', r.id));
+                      } catch (e) {
+                        handleFirestoreError(e, OperationType.DELETE, `resources/${r.id}`);
+                      }
+                    }} 
+                    className="p-3 text-neutral-400 hover:text-red-600 transition-colors"
+                  >
+                    <Trash2 size={18} />
+                  </button>
+                </div>
               </div>
             ))}
           </div>
         </div>
       ))}
+    </div>
+  );
+}
+
+// Admins Manager
+function AdminsManager({ admins }: { admins: AdminUser[] }) {
+  const [email, setEmail] = useState('');
+
+  const handleAdd = async () => {
+    if (!email || !email.includes('@')) return;
+    try {
+      await addDoc(collection(db, 'admins'), {
+        email: email.toLowerCase(),
+        addedAt: new Date()
+      });
+      setEmail('');
+    } catch (e) {
+      handleFirestoreError(e, OperationType.CREATE, 'admins');
+    }
+  };
+
+  return (
+    <div className="space-y-8">
+      <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
+        <h3 className="text-xl font-bold mb-6">Afegir Administrador</h3>
+        <div className="flex flex-col md:flex-row gap-4">
+          <div className="flex-1">
+            <Input label="Correu Electrònic" value={email} onChange={setEmail} />
+          </div>
+          <div className="pt-2 md:pt-8">
+             <button onClick={handleAdd} className="w-full md:w-auto px-8 py-4 bg-primary text-white rounded-2xl font-bold transition-all hover:shadow-lg active:scale-95">
+               Donar Permisos
+             </button>
+          </div>
+        </div>
+        <p className="text-[10px] text-slate-400 mt-4 italic">
+          * Els administradors poden gestionar tot el portal: escoles, notícies, recursos i altres administradors.
+        </p>
+      </div>
+
+      <div className="space-y-4">
+        {admins.map(admin => (
+          <div key={admin.id} className="bg-white p-6 rounded-2xl border border-neutral-100 flex items-center justify-between group transition-shadow hover:shadow-sm">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center font-bold">
+                {admin.email[0].toUpperCase()}
+              </div>
+              <div>
+                <span className="font-bold block text-slate-900">{admin.email}</span>
+                <span className="text-[10px] text-neutral-400 font-medium uppercase tracking-widest">Administrador Actiu</span>
+              </div>
+            </div>
+            <button 
+              type="button"
+              onClick={async (e) => {
+                e.stopPropagation();
+                try {
+                  await deleteDoc(doc(db, 'admins', admin.id));
+                } catch (e) {
+                  handleFirestoreError(e, OperationType.DELETE, `admins/${admin.id}`);
+                }
+              }}
+              className="p-3 text-neutral-400 hover:text-red-600 hover:bg-neutral-50 rounded-xl transition-all"
+            >
+              <Trash2 size={18} />
+            </button>
+          </div>
+        ))}
+        {admins.length === 0 && (
+          <div className="text-center py-12 text-slate-400 italic">
+            No hi ha administradors addicionals configurats.
+          </div>
+        )}
+      </div>
     </div>
   );
 }

@@ -14,7 +14,13 @@ service cloud.firestore {
     function isAdmin() {
       return isSignedIn() && (
         request.auth.token.email == 'hylomi3ia@gmail.com' ||
-        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
+        // Check if there is an admin document where the email field matches
+        // Note: This is an expensive query if not done by ID, so we'll 
+        // advise the user that the first admin (hardcoded) must add others.
+        // Actually, for simplicity in rules, let's allow read for admins 
+        // and let the client handle the list if they are in it.
+        false
       );
     }
     
@@ -33,7 +39,7 @@ service cloud.firestore {
       return data.keys().hasAll(['schoolId', 'title', 'type']) &&
              data.schoolId is string &&
              data.title is string && data.title.size() <= 200 &&
-             data.type in ['video', 'game', 'doc', 'link', 'kahoot', 'html'] &&
+             data.type in ['video', 'game', 'doc', 'link', 'kahoot', 'html', 'padlet', 'genially', 'canva', 'timeline'] &&
              (data.type == 'html' ? (data.content is string) : (data.url is string && data.url.size() <= 1000));
     }
 
@@ -77,10 +83,10 @@ service cloud.firestore {
       allow write: if isAdmin() && isValidConfig(request.resource.data);
     }
     
-    // ADMINS (Static list or managed)
-    match /admins/{userId} {
+    // ADMINS
+    match /admins/{adminId} {
       allow read: if isSignedIn();
-      allow write: if false; // Only manageable via console or higher logic
+      allow write: if isAdmin();
     }
   }
 }

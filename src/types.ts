@@ -46,6 +46,7 @@ export interface News {
 export interface SiteConfig {
   id: string;
   siteName: string;
+  logoUrl?: string;
   heroTitle: string;
   heroSubtitle: string;
   heroImage?: string;

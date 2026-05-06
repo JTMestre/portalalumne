@@ -266,8 +266,12 @@ function Navbar({ onOpenAdmin }: { onOpenAdmin: () => void }) {
           className="flex items-center gap-3 cursor-pointer group"
           onClick={() => { setActiveSchoolId(null); setIsMenuOpen(false); }}
         >
-          <div className="w-10 h-10 bg-primary rounded-2xl flex items-center justify-center text-white shadow-lg shadow-primary/20 transition-transform group-hover:scale-105">
-            <Building2 size={22} />
+          <div className="w-10 h-10 bg-primary rounded-full flex items-center justify-center text-white shadow-lg shadow-primary/20 transition-transform group-hover:scale-105 overflow-hidden">
+            {config?.logoUrl ? (
+              <img src={config.logoUrl} alt="Logo" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+            ) : (
+              <Building2 size={22} />
+            )}
           </div>
           <span className="text-xl font-bold font-heading tracking-tighter">
             {config?.siteName || 'Portal Docent'}
@@ -931,6 +935,7 @@ function ConfigManager({ config }: { config: SiteConfig | null }) {
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <Input label="Nom de la web" value={formData.siteName} onChange={v => setFormData({...formData, siteName: v})} />
+          <Input label="URL del Logo (Rodó)" value={formData.logoUrl} onChange={v => setFormData({...formData, logoUrl: v})} />
           <Input label="Mida font base" value={formData.baseFontSize} onChange={v => setFormData({...formData, baseFontSize: v})} />
           <Input label="Color Primari (Hex)" value={formData.primaryColor} onChange={v => setFormData({...formData, primaryColor: v})} />
           <Input label="Color Accent (Hex)" value={formData.accentColor} onChange={v => setFormData({...formData, accentColor: v})} />

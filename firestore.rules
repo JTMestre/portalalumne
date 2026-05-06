@@ -80,7 +80,7 @@ service cloud.firestore {
     
     // ADMINS
     match /admins/{adminId} {
-      allow read: if isSignedIn();
+      allow get, list: if true;
       allow write: if isAdmin();
     }
   }

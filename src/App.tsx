@@ -234,7 +234,7 @@ export default function App() {
       <div className="min-h-screen bg-slate-50 text-slate-900 select-none">
         <Navbar onOpenAdmin={() => setIsAdminPanelOpen(true)} />
         
-        <main className="pt-24 pb-12">
+        <main className="pb-12">
           <AnimatePresence mode="wait">
             {!activeSchoolId ? (
               <Home key="home" />
@@ -260,8 +260,8 @@ function Navbar({ onOpenAdmin }: { onOpenAdmin: () => void }) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   return (
-    <nav className="fixed top-4 left-1/2 -translate-x-1/2 z-50 w-[95%] max-w-7xl">
-      <div className="bg-white/80 backdrop-blur-md border border-slate-200 rounded-3xl px-6 h-16 flex items-center justify-between shadow-lg shadow-slate-100/50">
+    <nav className="relative z-[100] w-full bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-sm">
+      <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
         <div 
           className="flex items-center gap-3 cursor-pointer group"
           onClick={() => { setActiveSchoolId(null); setIsMenuOpen(false); }}
@@ -343,7 +343,7 @@ function Navbar({ onOpenAdmin }: { onOpenAdmin: () => void }) {
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
-            className="md:hidden absolute top-16 left-0 right-0 bg-white border-bottom border-neutral-200 p-4 flex flex-col gap-2"
+            className="md:hidden absolute top-20 left-0 right-0 bg-white border-bottom border-neutral-200 p-4 flex flex-col gap-2 shadow-xl"
           >
             <button 
               onClick={() => { setActiveSchoolId(null); setIsMenuOpen(false); }}

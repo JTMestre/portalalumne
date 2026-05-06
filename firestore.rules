@@ -13,8 +13,9 @@ service cloud.firestore {
     
     function isAdmin() {
       return isSignedIn() && (
-        request.auth.token.email == 'hylomi3ia@gmail.com' ||
-        exists(/databases/$(database)/documents/admins/$(request.auth.token.email))
+        request.auth.token.email.lower() == 'hylomi3ia@gmail.com' ||
+        request.auth.token.email.lower() == 'jtejero5@xtec.cat' ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.token.email.lower()))
       );
     }
     
@@ -33,7 +34,7 @@ service cloud.firestore {
       return data.keys().hasAll(['schoolId', 'title', 'type']) &&
              data.schoolId is string &&
              data.title is string && data.title.size() <= 200 &&
-             data.type in ['video', 'game', 'doc', 'link', 'kahoot', 'html', 'padlet', 'genially', 'canva', 'timeline'] &&
+             data.type in ['video', 'game', 'doc', 'link', 'kahoot', 'html', 'padlet', 'genially', 'canva', 'timeline', 'iframe'] &&
              (data.type == 'html' ? (data.content is string) : (data.url is string && data.url.size() <= 1000));
     }
 

@@ -134,8 +134,9 @@ export default function App() {
       setIsAdmin(false);
       return;
     }
-    const isCollectionAdmin = admins.some(a => a.email.toLowerCase() === user.email?.toLowerCase());
-    setIsAdmin(user.email === 'hylomi3ia@gmail.com' || isCollectionAdmin);
+    const isCollectionAdmin = admins.some(a => a.email.toLowerCase().trim() === user.email?.toLowerCase().trim());
+    const hardcodedAdmins = ['hylomi3ia@gmail.com', 'jtejero5@xtec.cat'];
+    setIsAdmin(hardcodedAdmins.includes(user.email?.toLowerCase() || '') || isCollectionAdmin);
   }, [user, admins]);
 
   // Inject dynamic styles

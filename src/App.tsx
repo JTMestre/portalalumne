@@ -638,10 +638,9 @@ function ResourceCard({ resource, idx }: { resource: Resource; idx: number }) {
   const embedTypes = ['html', 'iframe', 'genially', 'canva', 'padlet', 'timeline'];
   const isEmbed = embedTypes.includes(resource.type);
 
-  // Bento logic: make some cards bigger if they have description and it's an even index
-  // Special types (html, iframe) are ALWAYS large to give them priority
-  const isLarge = (resource.description && idx % 3 === 0) || isEmbed;
-  const isExtraLarge = resource.type === 'html' || resource.type === 'iframe' || resource.type === 'genially';
+  // Simplify logic to have all cards the same size
+  const isLarge = false;
+  const isExtraLarge = false;
 
   if (isEmbed) {
     return (
@@ -652,8 +651,8 @@ function ResourceCard({ resource, idx }: { resource: Resource; idx: number }) {
            animate={{ opacity: 1, scale: 1 }}
            transition={{ delay: idx * 0.05 }}
            className={cn(
-             "bento-card p-6 md:p-8 flex flex-col group relative overflow-hidden cursor-pointer h-full border-2 border-transparent hover:border-primary/20",
-             isExtraLarge ? "md:col-span-2 md:row-span-2" : (isLarge ? "md:col-span-2 md:row-span-1" : "md:col-span-1")
+             "bento-card p-6 md:p-8 flex flex-col group relative overflow-hidden cursor-pointer h-full border-2 border-transparent hover:border-primary/20 min-h-[320px]",
+             "md:col-span-1"
            )}
         >
           {resource.thumbnail && (
@@ -776,8 +775,8 @@ function ResourceCard({ resource, idx }: { resource: Resource; idx: number }) {
       animate={{ opacity: 1, scale: 1 }}
       transition={{ delay: idx * 0.05 }}
       className={cn(
-        "bento-card p-8 flex flex-col group relative overflow-hidden h-full decoration-none",
-        isLarge ? "md:col-span-2 md:row-span-1" : "md:col-span-1"
+        "bento-card p-8 flex flex-col group relative overflow-hidden h-full decoration-none min-h-[320px]",
+        "md:col-span-1"
       )}
     >
       {resource.thumbnail && (

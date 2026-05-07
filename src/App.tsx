@@ -3,6 +3,7 @@ import { onAuthStateChanged, User } from 'firebase/auth';
 import { collection, onSnapshot, doc, setDoc, addDoc, deleteDoc, updateDoc } from 'firebase/firestore';
 import { db, auth, login, logout, handleFirestoreError } from './lib/firebase';
 import { SiteConfig, OperationType, School, News, Resource, AdminUser, Cycle } from './types';
+import { GoogleGenAI, Type } from "@google/genai";
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Building2, 
@@ -508,13 +509,12 @@ function SchoolView({ schoolId }: { schoolId: string }) {
   const school = schools.find(s => s.id === schoolId);
   
   const filteredResources = resources.filter(r => {
-    if (r.schoolId !== schoolId) return false;
-    // Hide invisible resources for non-admins (or just always hide for the view, 
-    // assuming the student view shouldn't see them)
+    const isForThisSchool = r.schoolId === schoolId || (r.schoolIds && r.schoolIds.includes(schoolId));
+    if (!isForThisSchool) return false;
     if (r.isVisible === false) return false;
     if (activeCycle === 'ALL') return true;
     return r.cycle === activeCycle;
-  });
+  }).sort((a, b) => (a.order || 0) - (b.order || 0));
 
   if (!school) return null;
 
@@ -602,36 +602,37 @@ function SchoolView({ schoolId }: { schoolId: string }) {
   );
 }
 
+const resourceIcons = {
+  video: <Youtube size={20}/>,
+  game: <Gamepad2 size={20}/>,
+  doc: <FileText size={20}/>,
+  link: <LinkIcon size={20}/>,
+  kahoot: <div className="font-bold text-xs uppercase tracking-tighter">K</div>,
+  html: <Code size={20}/>,
+  iframe: <Monitor size={20}/>,
+  padlet: <Grid size={20}/>,
+  genially: <Sparkles size={20}/>,
+  canva: <Palette size={20}/>,
+  timeline: <Clock size={20}/>
+};
+
+const resourceColors = {
+  video: 'bg-[#FF0000] text-white shadow-lg shadow-red-500/20',     // YouTube Red
+  game: 'bg-[#764ABC] text-white shadow-lg shadow-indigo-500/20',   // Purple
+  doc: 'bg-[#2B579A] text-white shadow-lg shadow-blue-500/20',     // Word/Blue
+  link: 'bg-[#1e293b] text-white shadow-lg shadow-slate-500/20',   // Slate
+  kahoot: 'bg-[#46178F] text-white shadow-lg shadow-purple-900/20',// Kahoot Purple
+  html: 'bg-[#059669] text-white shadow-lg shadow-emerald-500/20', // Emerald
+  iframe: 'bg-[#3b82f6] text-white shadow-lg shadow-blue-500/20',  // Blue
+  padlet: 'bg-[#FF4D4D] text-white shadow-lg shadow-pink-500/20',  // Padlet Pinkish
+  genially: 'bg-[#00ACAC] text-white shadow-lg shadow-cyan-500/20',// Genially Cyan
+  canva: 'bg-[#00C4CC] text-white shadow-lg shadow-blue-400/20',   // Canva Teal
+  timeline: 'bg-[#D97706] text-white shadow-lg shadow-amber-500/20'// Amber
+};
+
 function ResourceCard({ resource, idx }: { resource: Resource; idx: number }) {
-  const icons = {
-    video: <Youtube size={20}/>,
-    game: <Gamepad2 size={20}/>,
-    doc: <FileText size={20}/>,
-    link: <LinkIcon size={20}/>,
-    kahoot: <div className="font-bold text-xs uppercase tracking-tighter">K</div>,
-    html: <Code size={20}/>,
-    iframe: <Monitor size={20}/>,
-    padlet: <Grid size={20}/>,
-    genially: <Sparkles size={20}/>,
-    canva: <Palette size={20}/>,
-    timeline: <Clock size={20}/>
-  };
-
-  const colors = {
-    video: 'bg-[#FF0000] text-white shadow-lg shadow-red-500/20',     // YouTube Red
-    game: 'bg-[#764ABC] text-white shadow-lg shadow-indigo-500/20',   // Purple
-    doc: 'bg-[#2B579A] text-white shadow-lg shadow-blue-500/20',     // Word/Blue
-    link: 'bg-[#1e293b] text-white shadow-lg shadow-slate-500/20',   // Slate
-    kahoot: 'bg-[#46178F] text-white shadow-lg shadow-purple-900/20',// Kahoot Purple
-    html: 'bg-[#059669] text-white shadow-lg shadow-emerald-500/20', // Emerald
-    iframe: 'bg-[#3b82f6] text-white shadow-lg shadow-blue-500/20',  // Blue
-    padlet: 'bg-[#FF4D4D] text-white shadow-lg shadow-pink-500/20',  // Padlet Pinkish
-    genially: 'bg-[#00ACAC] text-white shadow-lg shadow-cyan-500/20',// Genially Cyan
-    canva: 'bg-[#00C4CC] text-white shadow-lg shadow-blue-400/20',   // Canva Teal
-    timeline: 'bg-[#D97706] text-white shadow-lg shadow-amber-500/20'// Amber
-  };
-
   const [isOpen, setIsOpen] = useState(false);
+
 
   // Types that open in a modal iframe
   const embedTypes = ['html', 'iframe', 'genially', 'canva', 'padlet', 'timeline'];
@@ -662,8 +663,8 @@ function ResourceCard({ resource, idx }: { resource: Resource; idx: number }) {
           )}
           
           <div className="flex items-start justify-between mb-6 md:mb-8 relative z-10">
-            <div className={cn("w-12 h-12 md:w-14 md:h-14 rounded-2xl flex items-center justify-center transition-transform group-hover:rotate-12", colors[resource.type as keyof typeof colors])}>
-              {icons[resource.type as keyof typeof icons]}
+            <div className={cn("w-12 h-12 md:w-14 md:h-14 rounded-2xl flex items-center justify-center transition-transform group-hover:rotate-12", resourceColors[resource.type as keyof typeof resourceColors])}>
+              {resourceIcons[resource.type as keyof typeof resourceIcons]}
             </div>
             <div className="p-2 bg-slate-50/50 backdrop-blur rounded-xl opacity-0 group-hover:opacity-100 transition-opacity">
               {resource.type === 'html' ? <Code size={16} className="text-slate-400" /> : <Monitor size={16} className="text-slate-400" />}
@@ -683,7 +684,7 @@ function ResourceCard({ resource, idx }: { resource: Resource; idx: number }) {
 
           <div className="mt-4 pt-6 border-t border-slate-50 flex items-center justify-between relative z-10">
             <div className="flex items-center gap-2">
-              <span className={cn("px-2 py-0.5 text-[9px] font-bold rounded-full uppercase tracking-wider", colors[resource.type as keyof typeof colors])}>{resource.cycle || 'GENERAL'}</span>
+              <span className={cn("px-2 py-0.5 text-[9px] font-bold rounded-full uppercase tracking-wider", resourceColors[resource.type as keyof typeof resourceColors])}>{resource.cycle || 'GENERAL'}</span>
             </div>
             <div className="text-[10px] font-bold text-primary opacity-0 group-hover:opacity-100 transition-opacity uppercase tracking-wider">Obrir recurs</div>
           </div>
@@ -691,37 +692,75 @@ function ResourceCard({ resource, idx }: { resource: Resource; idx: number }) {
 
         <AnimatePresence>
           {isOpen && (
-            <div className="fixed inset-0 z-[200] bg-slate-900/98 backdrop-blur-md flex flex-col p-1 md:p-4">
-              <div className="flex items-center justify-between mb-2 md:mb-4 text-white px-4 py-2">
-                <div className="max-w-[70%]">
-                  <h2 className="text-xl md:text-2xl font-bold font-heading line-clamp-1">{resource.title}</h2>
-                  {resource.description && <p className="text-slate-400 text-[10px] md:text-xs line-clamp-1">{resource.description}</p>}
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[200] bg-slate-100/95 backdrop-blur-xl flex flex-col"
+            >
+              {/* Refined Integrated Header */}
+              <div className="h-16 md:h-20 bg-white border-b border-slate-200 flex items-center justify-between px-6 shadow-sm relative z-10">
+                <div className="flex items-center gap-4">
+                  <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center text-white", resourceColors[resource.type as keyof typeof resourceColors])}>
+                    {resourceIcons[resource.type as keyof typeof resourceIcons]}
+                  </div>
+                  <div>
+                    <h2 className="text-lg md:text-xl font-bold font-heading text-slate-900 leading-none">{resource.title}</h2>
+                    {resource.description && <p className="text-slate-400 text-[10px] md:text-xs mt-1 font-medium">{resource.description}</p>}
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
+                
+                <div className="flex items-center gap-3">
                   {resource.url && (
                     <a 
                       href={resource.url} 
                       target="_blank" 
                       rel="noopener noreferrer" 
-                      className="hidden sm:flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 rounded-xl text-[10px] font-bold transition-all border border-white/10"
+                      className="hidden sm:flex items-center gap-2 px-5 py-2.5 bg-slate-100 hover:bg-slate-200 rounded-xl text-[11px] font-bold text-slate-600 transition-all border border-slate-200"
                     >
-                      <ExternalLink size={14} /> Pantalla completa
+                      <ExternalLink size={14} /> Obrir en pestanya nova
                     </a>
                   )}
-                  <button onClick={() => setIsOpen(false)} className="p-2 md:p-3 bg-red-500/20 hover:bg-red-500/40 text-red-200 rounded-xl transition-all border border-red-500/20"><X size={20} /></button>
+                  <button 
+                    onClick={() => setIsOpen(false)} 
+                    className="p-2.5 md:p-3 bg-red-50 text-red-500 hover:bg-red-500 hover:text-white rounded-xl transition-all border border-red-100"
+                  >
+                    <X size={22} />
+                  </button>
                 </div>
               </div>
-              <div className="flex-1 bg-white rounded-lg md:rounded-2xl overflow-hidden shadow-2xl relative w-full h-full">
+
+              {/* Seamless Full-Viewport Viewer */}
+              <div className="flex-1 relative w-full h-full bg-white overflow-hidden">
                 <iframe 
                   src={resource.type === 'html' ? undefined : resource.url}
-                  srcDoc={resource.type === 'html' ? resource.content : undefined}
-                  className="w-full h-full border-none"
+                  srcDoc={resource.type === 'html' ? `
+                    <!DOCTYPE html>
+                    <html>
+                      <head>
+                        <meta charset="utf-8">
+                        <meta name="viewport" content="width=device-width, initial-scale=1">
+                        <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+                        <style>
+                          body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+                          ::-webkit-scrollbar { width: 8px; }
+                          ::-webkit-scrollbar-track { background: #f1f1f1; }
+                          ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+                          ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+                        </style>
+                      </head>
+                      <body>
+                        ${resource.content}
+                      </body>
+                    </html>
+                  ` : undefined}
+                  className="w-full h-full border-none shadow-inner"
                   title={resource.title}
                   sandbox="allow-scripts allow-forms allow-modals allow-same-origin allow-popups"
                   referrerPolicy="no-referrer"
                 />
               </div>
-            </div>
+            </motion.div>
           )}
         </AnimatePresence>
       </>
@@ -748,8 +787,8 @@ function ResourceCard({ resource, idx }: { resource: Resource; idx: number }) {
       )}
 
       <div className="flex items-start justify-between mb-8 relative z-10">
-        <div className={cn("w-12 h-12 rounded-2xl flex items-center justify-center transition-transform group-hover:rotate-12", colors[resource.type])}>
-          {icons[resource.type]}
+        <div className={cn("w-12 h-12 rounded-2xl flex items-center justify-center transition-transform group-hover:rotate-12", resourceColors[resource.type as keyof typeof resourceColors])}>
+          {resourceIcons[resource.type as keyof typeof resourceIcons]}
         </div>
         <div className="p-2 bg-slate-50/50 backdrop-blur rounded-xl opacity-0 group-hover:opacity-100 transition-opacity">
           <ExternalLink size={16} className="text-slate-400" />
@@ -766,7 +805,7 @@ function ResourceCard({ resource, idx }: { resource: Resource; idx: number }) {
       <div className="mt-4 pt-6 border-t border-slate-50 flex items-center justify-between relative z-10">
         <div className="flex items-center gap-2">
           <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">{resource.type}</span>
-          <span className={cn("px-2 py-0.5 text-[9px] font-bold rounded-full uppercase tracking-wider", colors[resource.type])}>{resource.cycle || 'GENERAL'}</span>
+          <span className={cn("px-2 py-0.5 text-[9px] font-bold rounded-full uppercase tracking-wider", resourceColors[resource.type as keyof typeof resourceColors])}>{resource.cycle || 'GENERAL'}</span>
         </div>
         <div className="text-[10px] font-bold text-primary opacity-0 group-hover:opacity-100 transition-opacity">OBRIR</div>
       </div>
@@ -774,11 +813,426 @@ function ResourceCard({ resource, idx }: { resource: Resource; idx: number }) {
   );
 }
 
+const SYSTEM_PROMPT = `
+Actua com un dissenyador UX/UI educatiu expert. El teu objectiu és generar el contingut estructurat per a un portal temàtic interactiu de primària.
+RETORNA SEMPRE UN OBJECTE JSON EXACTE.
+
+ESTRUCTURA DEL JSON:
+{
+  "title": "Títol del portal",
+  "description": "Descripció breu",
+  "cycle": "GENERAL",
+  "themeColor": "#3b82f6",
+  "hero": { "title": "Títol Hero", "subtitle": "Subtítol Hero" },
+  "infographics": [
+    { "title": "Títol 1", "text": "Contingut infografia 1", "icon": "icon_name" },
+    { "title": "Títol 2", "text": "Contingut infografia 2", "icon": "icon_name" },
+    { "title": "Títol 3", "text": "Contingut infografia 3", "icon": "icon_name" }
+  ],
+  "quiz": [
+    { "question": "Pregunta 1", "options": ["Opció A", "Opció B", "Opció C"], "correct": 0 },
+    { "question": "Pregunta 2", "options": ["Opció A", "Opció B", "Opció C"], "correct": 0 }
+  ],
+  "game": { "type": "memory", "title": "Posa't a prova!", "items": ["Concepte 1", "Concepte 2", "Concepte 3", "Concepte 4"] },
+  "form": { "title": "Volem la teva opinió", "prompt": "Escriu la teva proposta aquí..." }
+}
+
+INSTRUCCIONS DE CONTINGUT:
+- Tot en CATALÀ.
+- Contingut didàctic, clar i motivador per a nens de 6 a 12 anys.
+- Sigues creatiu i usa dades reals o rellevants basades en el prompt de l'usuari.
+`;
+
+interface PortalStructure {
+  title: string;
+  description: string;
+  cycle: Cycle;
+  themeColor: string;
+  hero: { title: string; subtitle: string; };
+  infographics: { title: string; text: string; icon: string; }[];
+  quiz: { question: string; options: string[]; correct: number; }[];
+  game: { type: string; title: string; items: string[]; };
+  form: { title: string; prompt: string; };
+}
+
+function PortalGenerator({ schools, resources }: { schools: School[], resources: Resource[] }) {
+  const [prompt, setPrompt] = useState('');
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [structure, setStructure] = useState<PortalStructure | null>(null);
+  const [selectedSchools, setSelectedSchools] = useState<string[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [activeEditTab, setActiveEditTab] = useState<'info' | 'quiz' | 'game' | 'form'>('info');
+
+  const handleGenerate = async () => {
+    if (!prompt) return;
+    setIsGenerating(true);
+    setError(null);
+    try {
+      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+      const response = await ai.models.generateContent({
+        model: "gemini-3-flash-preview",
+        contents: `Crea una estructura de portal didàctic sobre: ${prompt}`,
+        config: {
+          systemInstruction: SYSTEM_PROMPT,
+          responseMimeType: "application/json"
+        }
+      });
+
+      const res = JSON.parse(response.text);
+      setStructure(res as PortalStructure);
+    } catch (e) {
+      console.error("Error generating portal:", e);
+      setError("Error en la generació. Revisa la teva connexió o el prompt.");
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const generateHTML = (data: PortalStructure) => {
+    return `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+        <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap" rel="stylesheet">
+        <style>
+          body { font-family: 'Outfit', sans-serif; background-color: #f8fafc; color: #1e293b; }
+          .card { border-radius: 40px; border: 1px solid #e2e8f0; background: white; padding: 40px; }
+          .btn { transition: all 0.2s; border-radius: 16px; font-weight: 700; }
+          .btn:active { transform: scale(0.95); }
+        </style>
+      </head>
+      <body class="p-4 md:p-8 max-w-5xl mx-auto space-y-8">
+        <!-- HERO -->
+        <header class="card bg-slate-900 text-white overflow-hidden relative">
+          <div class="relative z-10">
+            <span class="bg-yellow-400 text-slate-900 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest mb-4 inline-block">Portal Didàctic</span>
+            <h1 class="text-4xl md:text-6xl font-black mb-4 leading-none">${data.hero.title}</h1>
+            <p class="text-slate-400 text-lg md:text-xl font-medium max-w-2xl">${data.hero.subtitle}</p>
+          </div>
+        </header>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+          <!-- INFO BLOC -->
+          <div class="card space-y-8">
+            <h2 class="text-2xl font-black flex items-center gap-3">💡 Conceptes Clau</h2>
+            ${data.infographics.map((info, i) => `
+              <div class="space-y-2 p-6 bg-slate-50 rounded-[2rem] border border-slate-100">
+                <h3 class="font-black text-lg text-slate-800 flex items-center gap-3">
+                  <span class="text-xs w-6 h-6 bg-white border flex items-center justify-center rounded-full text-slate-400">${i+1}</span>
+                  ${info.title}
+                </h3>
+                <p class="text-slate-500 text-sm leading-relaxed">${info.text}</p>
+              </div>
+            `).join('')}
+          </div>
+
+          <!-- QUIZ -->
+          <div class="card space-y-6" id="quiz-container">
+            <h2 class="text-2xl font-black">🎯 Posa't a prova</h2>
+            <div id="quiz-content" class="space-y-6">
+              <!-- JS Injected -->
+            </div>
+          </div>
+        </div>
+
+        <!-- FORMULARI -->
+        <div class="card bg-emerald-500 text-white space-y-6 overflow-hidden relative">
+          <div class="flex flex-col md:flex-row md:items-center justify-between gap-8">
+            <div class="space-y-4">
+              <h2 class="text-4xl font-black">${data.form.title}</h2>
+              <p class="font-medium text-emerald-100">La veu dels alumnes és el més important!</p>
+            </div>
+            <div class="bg-white/10 p-2 rounded-[2.5rem] flex-1 max-w-md w-full border border-white/20">
+              <div class="bg-white p-6 rounded-[2rem] space-y-4 text-slate-800">
+                <input type="text" placeholder="El teu nom..." class="w-full p-4 bg-slate-50 border border-slate-100 rounded-xl outline-none" id="student_name">
+                <textarea placeholder="${data.form.prompt}" class="w-full p-4 bg-slate-50 border border-slate-100 rounded-xl min-h-[100px] outline-none" id="student_proposal"></textarea>
+                <button onclick="submitForm()" class="w-full py-4 bg-emerald-500 text-white rounded-xl font-bold shadow-lg shadow-emerald-500/20">Enviar Proposta</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <script>
+          const quizData = ${JSON.stringify(data.quiz)};
+          let currentQ = 0;
+
+          function renderQuiz() {
+            const q = quizData[currentQ];
+            if(!q) {
+              document.getElementById('quiz-content').innerHTML = '<div class="text-center p-8 bg-emerald-50 text-emerald-600 rounded-3xl font-bold">Felicitats! Has completat el quiz! 🎉</div>';
+              return;
+            }
+            let html = '<p class="text-lg font-bold text-slate-700">' + (currentQ+1) + '. ' + q.question + '</p>';
+            html += '<div class="space-y-3">';
+            q.options.forEach((opt, i) => {
+              html += '<button onclick="checkAnswer(' + i + ')" class="w-full p-4 bg-white border border-slate-200 rounded-2xl text-left hover:border-emerald-400 hover:bg-emerald-50 transition-all font-bold text-slate-600">' + opt + '</button>';
+            });
+            html += '</div>';
+            document.getElementById('quiz-content').innerHTML = html;
+          }
+
+          function checkAnswer(idx) {
+            if(idx === quizData[currentQ].correct) {
+              currentQ++;
+              renderQuiz();
+            } else {
+              alert('Torna-ho a provar! ❌');
+            }
+          }
+
+          function submitForm() {
+            const name = document.getElementById('student_name').value;
+            const proposal = document.getElementById('student_proposal').value;
+            if(!name || !proposal) return alert('Completa tots els camps!');
+            alert('Gràcies ' + name + '! Hem rebut la teva proposta rectament. ❤️');
+            document.getElementById('student_name').value = '';
+            document.getElementById('student_proposal').value = '';
+          }
+
+          renderQuiz();
+        </script>
+      </body>
+      </html>
+    `;
+  };
+
+  const handleSave = async () => {
+    if (!structure || selectedSchools.length === 0) return;
+    try {
+      const finalHTML = generateHTML(structure);
+      const maxOrder = resources.reduce((max, r) => Math.max(max, r.order || 0), 0);
+      await addDoc(collection(db, 'resources'), {
+        title: structure.title,
+        description: structure.description,
+        cycle: structure.cycle,
+        type: 'html',
+        content: finalHTML,
+        schoolIds: selectedSchools,
+        isVisible: true,
+        createdAt: new Date(),
+        order: maxOrder + 1
+      });
+      alert('Recurs generat i guardat amb èxit!');
+      setStructure(null);
+      setPrompt('');
+      setSelectedSchools([]);
+    } catch (e) {
+      handleFirestoreError(e, OperationType.CREATE, 'resources');
+    }
+  };
+
+  return (
+    <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+      {/* INPUT SECTION */}
+      <div className="space-y-6">
+        <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="w-10 h-10 bg-emerald-50 text-emerald-500 rounded-xl flex items-center justify-center">
+              <Sparkles size={20} />
+            </div>
+            <div>
+              <h3 className="text-xl font-bold text-slate-800">Generació Intel·ligent</h3>
+              <p className="text-slate-400 text-xs font-medium">Explica què vols crear per als teus alumnes.</p>
+            </div>
+          </div>
+
+          <textarea
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
+            placeholder="Exemple: Una guia sobre el Consell Escolar amb punts clau, quiz i formulari de propostes..."
+            className="w-full p-6 bg-slate-50 border border-slate-100 rounded-[2rem] min-h-[200px] outline-none focus:border-primary transition-all text-slate-700 font-medium"
+          />
+
+          <button
+            onClick={handleGenerate}
+            disabled={isGenerating || !prompt}
+            className={cn(
+              "w-full py-5 rounded-2xl font-bold text-white transition-all flex items-center justify-center gap-3 mt-6",
+              isGenerating ? "bg-slate-300 cursor-not-allowed" : "bg-primary hover:shadow-xl hover:shadow-primary/20"
+            )}
+          >
+            {isGenerating ? "Generant estructura..." : "Generar Esborrany"}
+          </button>
+        </div>
+
+        {structure && (
+          <div className="bg-white p-8 rounded-[2.5rem] border border-primary shadow-sm space-y-6">
+            <h4 className="font-bold text-slate-800">Finalitzar i Publicar</h4>
+            <div className="space-y-4">
+              <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Escoles de destí</label>
+              <div className="flex flex-wrap gap-2">
+                {schools.map(s => (
+                  <button
+                    key={s.id}
+                    onClick={() => {
+                      if (selectedSchools.includes(s.id)) setSelectedSchools(selectedSchools.filter(id => id !== s.id));
+                      else setSelectedSchools([...selectedSchools, s.id]);
+                    }}
+                    className={cn(
+                      "px-3 py-2 rounded-xl text-[10px] font-bold border transition-all",
+                      selectedSchools.includes(s.id) ? "bg-primary text-white border-primary" : "bg-white text-slate-500 border-slate-200"
+                    )}
+                  >
+                    {s.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <button
+              onClick={handleSave}
+              disabled={selectedSchools.length === 0}
+              className="w-full py-5 bg-emerald-500 text-white rounded-2xl font-bold shadow-lg shadow-emerald-500/20 disabled:opacity-50"
+            >
+              Publicar Recurs de forma definitiva
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* EDITOR SECTION */}
+      <div className="bg-slate-50 p-6 md:p-8 rounded-[3rem] border border-slate-200 min-h-[600px]">
+        {structure ? (
+          <div className="space-y-8">
+            <div className="flex items-center justify-between border-b border-slate-200 pb-6">
+              <h4 className="text-xl font-bold text-slate-800">Edita el Contingut</h4>
+              <div className="flex gap-2">
+                {['info', 'quiz', 'game', 'form'].map((t) => (
+                  <button
+                    key={t}
+                    onClick={() => setActiveEditTab(t as any)}
+                    className={cn(
+                      "px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all",
+                      activeEditTab === t ? "bg-slate-800 text-white" : "bg-white text-slate-500 border border-slate-200"
+                    )}
+                  >
+                    {t}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-6">
+              <div className="space-y-3">
+                <input 
+                  className="w-full text-2xl font-black bg-transparent border-none outline-none focus:text-primary" 
+                  value={structure.title}
+                  onChange={e => setStructure({...structure, title: e.target.value})}
+                />
+                <textarea 
+                  className="w-full bg-white p-4 rounded-xl border border-slate-100 text-sm italic text-slate-500"
+                  value={structure.description}
+                  onChange={e => setStructure({...structure, description: e.target.value})}
+                />
+              </div>
+
+              {activeEditTab === 'info' && (
+                <div className="space-y-4">
+                  {structure.infographics.map((info, i) => (
+                    <div key={i} className="p-5 bg-white rounded-3xl border border-slate-100 space-y-2">
+                       <input 
+                         className="w-full font-bold text-slate-800 bg-transparent border-none outline-none"
+                         value={info.title}
+                         onChange={e => {
+                           const updated = [...structure.infographics];
+                           updated[i].title = e.target.value;
+                           setStructure({...structure, infographics: updated});
+                         }}
+                       />
+                       <textarea 
+                         className="w-full text-xs text-slate-500 bg-transparent border-none outline-none min-h-[60px]"
+                         value={info.text}
+                         onChange={e => {
+                           const updated = [...structure.infographics];
+                           updated[i].text = e.target.value;
+                           setStructure({...structure, infographics: updated});
+                         }}
+                       />
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {activeEditTab === 'quiz' && (
+                <div className="space-y-6">
+                  {structure.quiz.map((q, i) => (
+                    <div key={i} className="p-5 bg-white rounded-3xl border border-slate-100 space-y-4">
+                      <input 
+                        className="w-full font-bold text-slate-800 p-2 border-b border-slate-50 outline-none" 
+                        value={q.question}
+                        onChange={e => {
+                          const updated = [...structure.quiz];
+                          updated[i].question = e.target.value;
+                          setStructure({...structure, quiz: updated});
+                        }}
+                      />
+                      <div className="space-y-2">
+                        {q.options.map((opt, oi) => (
+                          <div key={oi} className="flex items-center gap-2">
+                            <input 
+                              type="radio" 
+                              checked={q.correct === oi} 
+                              onChange={() => {
+                                const updated = [...structure.quiz];
+                                updated[i].correct = oi;
+                                setStructure({...structure, quiz: updated});
+                              }}
+                            />
+                            <input 
+                              className="flex-1 text-xs p-2 bg-slate-50 rounded-lg outline-none"
+                              value={opt}
+                              onChange={e => {
+                                const updated = [...structure.quiz];
+                                updated[i].options[oi] = e.target.value;
+                                setStructure({...structure, quiz: updated});
+                              }}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {activeEditTab === 'form' && (
+                <div className="p-5 bg-white rounded-3xl border border-slate-100 space-y-4">
+                  <input 
+                    className="w-full font-black text-slate-800 text-lg outline-none"
+                    value={structure.form.title}
+                    onChange={e => {
+                      setStructure({...structure, form: { ...structure.form, title: e.target.value }});
+                    }}
+                  />
+                  <textarea 
+                    className="w-full text-sm text-slate-500 bg-slate-50 p-4 rounded-xl min-h-[80px] outline-none"
+                    value={structure.form.prompt}
+                    onChange={e => {
+                      setStructure({...structure, form: { ...structure.form, prompt: e.target.value }});
+                    }}
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="flex flex-col items-center justify-center h-full text-slate-300 space-y-4">
+            <Sparkles size={48} className="opacity-20" />
+            <p className="font-bold text-sm tracking-widest uppercase">Esperant un nou projecte...</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ADMIN PANEL
 
 function AdminPanel({ onClose }: { onClose: () => void }) {
   const { config, schools, news, resources, admins } = useApp();
-  const [activeTab, setActiveTab] = useState<'config' | 'schools' | 'news' | 'resources' | 'admins'>('config');
+  const [activeTab, setActiveTab] = useState<'config' | 'schools' | 'news' | 'resources' | 'admins' | 'generator'>('config');
 
   return (
     <div className="fixed inset-0 z-[100] bg-slate-900/40 backdrop-blur-md flex items-center justify-end p-4 md:p-6">
@@ -802,6 +1256,13 @@ function AdminPanel({ onClose }: { onClose: () => void }) {
                 <TabButton active={activeTab === 'config'} onClick={() => setActiveTab('config')} label="Configuració" icon={<Settings size={18}/>} />
                 <TabButton active={activeTab === 'schools'} onClick={() => setActiveTab('schools')} label="Escoles" icon={<Building2 size={18}/>} />
                 <TabButton active={activeTab === 'admins'} onClick={() => setActiveTab('admins')} label="Administradors" icon={<Users size={18}/>} />
+              </div>
+            </div>
+
+            <div>
+              <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-4 px-2">Eines IA</div>
+              <div className="space-y-1">
+                <TabButton active={activeTab === 'generator'} onClick={() => setActiveTab('generator')} label="Generador Portals" icon={<Sparkles size={18}/>} />
               </div>
             </div>
 
@@ -834,6 +1295,7 @@ function AdminPanel({ onClose }: { onClose: () => void }) {
                 {activeTab === 'news' && 'Notícies Recents'}
                 {activeTab === 'resources' && 'Biblioteca de Recursos'}
                 {activeTab === 'admins' && 'Administradors del Sistema'}
+                {activeTab === 'generator' && 'Generador de Portals IA'}
               </h2>
               <p className="text-slate-400 text-sm mt-1">Crea, edita o elimina elements del sistema.</p>
             </div>
@@ -856,6 +1318,7 @@ function AdminPanel({ onClose }: { onClose: () => void }) {
               {activeTab === 'news' && <NewsManager news={news} schools={schools} />}
               {activeTab === 'resources' && <ResourcesManager resources={resources} schools={schools} />}
               {activeTab === 'admins' && <AdminsManager admins={admins} />}
+              {activeTab === 'generator' && <PortalGenerator schools={schools} resources={resources} />}
             </motion.div>
           </AnimatePresence>
         </div>
@@ -1269,16 +1732,18 @@ function ResourcesManager({ resources, schools }: { resources: Resource[]; schoo
     content: '', 
     isVisible: true,
     thumbnail: '',
-    schoolId: schools[0]?.id || '' 
+    schoolIds: [schools[0]?.id || ''] 
   });
 
   const handleAdd = async () => {
-    if (!formData.title || (!formData.url && formData.type !== 'html') || !formData.schoolId) return;
+    if (!formData.title || (!formData.url && formData.type !== 'html') || (!formData.schoolIds?.length && !formData.schoolId)) return;
     try {
+      const maxOrder = resources.reduce((max, r) => Math.max(max, r.order || 0), 0);
       await addDoc(collection(db, 'resources'), {
         ...formData,
         isVisible: formData.isVisible !== false,
         cycle: formData.cycle || 'GENERAL',
+        order: maxOrder + 1,
         createdAt: new Date()
       });
       resetForm();
@@ -1288,7 +1753,7 @@ function ResourcesManager({ resources, schools }: { resources: Resource[]; schoo
   };
 
   const handleUpdate = async () => {
-    if (!editingResource || !formData.title || (!formData.url && formData.type !== 'html') || !formData.schoolId) return;
+    if (!editingResource || !formData.title || (!formData.url && formData.type !== 'html') || (!formData.schoolIds?.length && !formData.schoolId)) return;
     try {
       await updateDoc(doc(db, 'resources', editingResource.id), formData);
       resetForm();
@@ -1297,15 +1762,37 @@ function ResourcesManager({ resources, schools }: { resources: Resource[]; schoo
     }
   };
 
+  const moveResource = async (res: Resource, direction: 'up' | 'down') => {
+    const sorted = [...resources].sort((a, b) => (a.order || 0) - (b.order || 0));
+    const idx = sorted.findIndex(r => r.id === res.id);
+    if (idx === -1) return;
+    
+    const targetIdx = direction === 'up' ? idx - 1 : idx + 1;
+    if (targetIdx < 0 || targetIdx >= sorted.length) return;
+    
+    const targetRes = sorted[targetIdx];
+    const currentOrder = res.order || 0;
+    const targetOrder = targetRes.order || 0;
+    
+    try {
+      await updateDoc(doc(db, 'resources', res.id), { order: targetOrder });
+      await updateDoc(doc(db, 'resources', targetRes.id), { order: currentOrder });
+    } catch (e) {
+      handleFirestoreError(e, OperationType.UPDATE, `resources/reorder`);
+    }
+  };
+
   const resetForm = () => {
-    setFormData({ title: '', type: 'link', cycle: 'GENERAL', url: '', content: '', isVisible: true, thumbnail: '', schoolId: schools[0]?.id || '' });
+    setFormData({ title: '', type: 'link', cycle: 'GENERAL', url: '', content: '', isVisible: true, thumbnail: '', schoolIds: [schools[0]?.id || ''] });
     setIsAdding(false);
     setEditingResource(null);
   };
 
   const startEdit = (r: Resource) => {
     setEditingResource(r);
-    setFormData({ ...r });
+    // Support legacy schoolId by converting it to schoolIds array if needed
+    const schoolIds = r.schoolIds || (r.schoolId ? [r.schoolId] : []);
+    setFormData({ ...r, schoolIds });
     setIsAdding(false);
   };
 
@@ -1344,17 +1831,46 @@ function ResourcesManager({ resources, schools }: { resources: Resource[]; schoo
           <h4 className="text-lg font-bold">{editingResource ? 'Editar Recurs' : 'Afegir Nou Recurs'}</h4>
           <Input label="Títol del recurs" value={formData.title} onChange={v => setFormData({...formData, title: v})} />
           
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="space-y-1">
-              <label className="text-xs font-bold uppercase tracking-wider text-neutral-400">Escola</label>
-              <select 
-                value={formData.schoolId} 
-                onChange={e => setFormData({...formData, schoolId: e.target.value})}
-                className="w-full p-4 bg-neutral-50 border border-neutral-100 rounded-2xl outline-none"
-              >
-                {schools.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-              </select>
+          <div className="space-y-4 p-5 bg-neutral-50 rounded-2xl border border-neutral-100">
+            <label className="text-xs font-bold uppercase tracking-wider text-neutral-400">Escoles on apareixerà (Pots triar vàries)</label>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-2">
+              {schools.map(s => {
+                const isSelected = (formData.schoolIds || []).includes(s.id) || formData.schoolId === s.id;
+                return (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => {
+                      const current = formData.schoolIds || (formData.schoolId ? [formData.schoolId] : []);
+                      let updated;
+                      if (current.includes(s.id)) {
+                        updated = current.filter(id => id !== s.id);
+                      } else {
+                        updated = [...current, s.id];
+                      }
+                      setFormData({ ...formData, schoolIds: updated, schoolId: undefined });
+                    }}
+                    className={cn(
+                      "group px-3 py-3 rounded-xl text-[10px] font-bold border transition-all flex items-center justify-between gap-2 text-left",
+                      isSelected
+                        ? "bg-primary text-white border-primary shadow-md shadow-primary/10"
+                        : "bg-white text-slate-500 border-slate-200 hover:border-primary/30"
+                    )}
+                  >
+                    <span className="truncate">{s.name}</span>
+                    <div className={cn(
+                      "w-4 h-4 rounded-full border-2 flex items-center justify-center transition-all",
+                      isSelected ? "border-white bg-white/20" : "border-slate-200"
+                    )}>
+                      {isSelected && <Plus size={10} className="rotate-45" />}
+                    </div>
+                  </button>
+                );
+              })}
             </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-1">
               <label className="text-xs font-bold uppercase tracking-wider text-neutral-400">Cicle</label>
               <select 
@@ -1448,33 +1964,53 @@ function ResourcesManager({ resources, schools }: { resources: Resource[]; schoo
               <Building2 size={14}/> {s.name}
             </h4>
             <div className="space-y-3">
-              {resources.filter(r => r.schoolId === s.id).map(r => (
-                <div key={r.id} className="bg-white p-4 rounded-2xl border border-neutral-100 flex items-center justify-between group transition-shadow hover:shadow-sm">
+              {resources
+                .filter(r => r.schoolId === s.id || (r.schoolIds && r.schoolIds.includes(s.id)))
+                .sort((a, b) => (a.order || 0) - (b.order || 0))
+                .map((r, idx, arr) => (
+                <div key={r.id} className="bg-white p-4 rounded-3xl border border-neutral-100 flex items-center justify-between group transition-shadow hover:shadow-sm">
                   <div className="flex items-center gap-3">
+                    <div className="flex flex-col items-center gap-1 pr-2 border-r border-slate-100 -ml-1">
+                      <button 
+                         disabled={idx === 0}
+                         onClick={() => moveResource(r, 'up')}
+                         className={cn(
+                           "p-1 rounded-md transition-all",
+                           idx === 0 ? "text-slate-100" : "text-slate-400 hover:bg-slate-50 hover:text-primary"
+                         )}
+                      >
+                        <ArrowUp size={14} />
+                      </button>
+                      <button 
+                         disabled={idx === arr.length - 1}
+                         onClick={() => moveResource(r, 'down')}
+                         className={cn(
+                           "p-1 rounded-md transition-all",
+                           idx === arr.length - 1 ? "text-slate-100" : "text-slate-400 hover:bg-slate-50 hover:text-primary"
+                         )}
+                      >
+                        <ArrowDown size={14} />
+                      </button>
+                    </div>
                     <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center overflow-hidden", r.thumbnail ? "p-0" : "bg-neutral-50")}>
                       {r.thumbnail ? (
                         <img src={r.thumbnail} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                       ) : (
                         <div className="text-neutral-300">
-                          {r.type === 'video' && <Youtube size={16}/>}
-                          {r.type === 'game' && <Gamepad2 size={16}/>}
-                          {r.type === 'kahoot' && <div className="font-bold text-[10px]">K</div>}
-                          {r.type === 'doc' && <FileText size={16}/>}
-                          {r.type === 'link' && <LinkIcon size={16}/>}
-                          {r.type === 'html' && <Code size={16}/>}
+                          {resourceIcons[r.type as keyof typeof resourceIcons] || <Grid size={18}/>}
                         </div>
                       )}
                     </div>
                     <div>
-                      <span className="font-bold block">{r.title}</span>
-                      <div className="flex items-center gap-2">
-                         <span className="text-[10px] text-neutral-400 font-medium uppercase">{r.type}</span>
-                         {r.cycle && <span className="text-[9px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-full font-bold">{r.cycle}</span>}
-                         {r.isVisible === false && <span className="text-[9px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded-full font-bold">OCULT</span>}
+                      <span className="font-bold block text-slate-800">{r.title}</span>
+                      <div className="flex items-center gap-2 mt-0.5">
+                         <span className="text-[9px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-full font-bold uppercase">{r.type}</span>
+                         {r.cycle && <span className="text-[9px] bg-primary/5 text-primary px-1.5 py-0.5 rounded-full font-bold">{r.cycle}</span>}
+                         {r.isVisible === false && <span className="text-[9px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded-full font-bold uppercase">Ocult</span>}
                       </div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1">
                     <button 
                       type="button"
                       onClick={() => toggleVisibility(r)}
@@ -1506,28 +2042,28 @@ function ResourcesManager({ resources, schools }: { resources: Resource[]; schoo
                   </div>
                 </div>
               ))}
+              {resources.filter(r => r.schoolId === s.id || (r.schoolIds && r.schoolIds.includes(s.id))).length === 0 && (
+                <div className="p-10 border-2 border-dashed border-slate-100 rounded-[2rem] text-center text-slate-300 text-xs font-bold bg-slate-50/20">
+                  No hi ha recursos assignats a aquesta escola.
+                </div>
+              )}
             </div>
           </div>
         ))}
 
         {/* Orphaned resources */}
-        {resources.filter(r => !schools.some(s => s.id === r.schoolId)).length > 0 && (
+        {resources.filter(r => !schools.some(s => s.id === r.schoolId || (r.schoolIds && r.schoolIds.includes(s.id)))).length > 0 && (
           <div className="pt-8 border-t border-dashed border-neutral-200">
             <h4 className="text-sm font-bold uppercase tracking-widest text-red-400 mb-4 flex items-center gap-2 px-2">
               <X size={14}/> Recursos sense escola (Orfes)
             </h4>
             <div className="space-y-3">
-              {resources.filter(r => !schools.some(s => s.id === r.schoolId)).map(r => (
+              {resources.filter(r => !schools.some(s => s.id === r.schoolId || (r.schoolIds && r.schoolIds.includes(s.id)))).map(r => (
                 <div key={r.id} className="bg-red-50/30 p-4 rounded-2xl border border-red-100 flex items-center justify-between group">
                   <div className="flex items-center gap-3">
                     <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center text-red-200 border border-red-50">
                       <div className="text-red-300">
-                        {r.type === 'video' && <Youtube size={16}/>}
-                        {r.type === 'game' && <Gamepad2 size={16}/>}
-                        {r.type === 'kahoot' && <div className="font-bold text-[10px]">K</div>}
-                        {r.type === 'doc' && <FileText size={16}/>}
-                        {r.type === 'link' && <LinkIcon size={16}/>}
-                        {r.type === 'html' && <Code size={16}/>}
+                        {resourceIcons[r.type as keyof typeof resourceIcons] || <Grid size={18}/>}
                       </div>
                     </div>
                     <div>

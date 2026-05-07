@@ -14,7 +14,8 @@ export type Cycle = 'CI' | 'CM' | 'CS' | 'GENERAL';
 
 export interface Resource {
   id: string;
-  schoolId: string;
+  schoolId?: string; // Kept for backward compatibility
+  schoolIds?: string[]; // Added for multiple schools
   title: string;
   description?: string;
   type: ResourceType;
@@ -23,6 +24,7 @@ export interface Resource {
   content?: string; // For HTML/JS code
   thumbnail?: string;
   isVisible?: boolean;
+  order?: number; // Added for sorting
   createdAt: any;
 }
 

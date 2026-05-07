@@ -31,8 +31,8 @@ service cloud.firestore {
     }
 
     function isValidResource(data) {
-      return data.keys().hasAll(['schoolId', 'title', 'type']) &&
-             data.schoolId is string &&
+      return data.keys().hasAll(['title', 'type']) &&
+             (data.get('schoolId', '') is string || data.get('schoolIds', []) is list) &&
              data.title is string && data.title.size() <= 200 &&
              data.type in ['video', 'game', 'doc', 'link', 'kahoot', 'html', 'padlet', 'genially', 'canva', 'timeline', 'iframe'] &&
              (data.type == 'html' ? (data.content is string) : (data.url is string && data.url.size() <= 1000));

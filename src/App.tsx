@@ -168,47 +168,11 @@ export default function App() {
   }, [config]);
 
   useEffect(() => {
-    if (isAdmin && !loading) {
-      // Only bootstrap if the schools collection is truly empty and we haven't tried yet this session
-      const bootstraped = sessionStorage.getItem('portal_bootstrapped');
-      
-      if (schools.length === 0 && !bootstraped) {
-        const bootstrapData = async () => {
-          try {
-            sessionStorage.setItem('portal_bootstrapped', 'true');
-            await addDoc(collection(db, 'schools'), {
-              name: 'ZER Els Ceps',
-              slug: 'zer-els-ceps',
-              order: 0
-            });
-          } catch (e) {
-            console.error("Error bootstrapping initial data", e);
-          }
-        };
-        bootstrapData();
-      }
-
-      // Bootstrap specific resource only if school exists but resource doesn't
-      const zerSchool = schools.find(s => s.slug === 'zer-els-ceps');
-      if (zerSchool && resources.length === 0 && !bootstraped) {
-        const bootstrapResource = async () => {
-          try {
-            await addDoc(collection(db, 'resources'), {
-              schoolId: zerSchool.id,
-              title: 'Consell Escolar',
-              description: 'Aplicació per a la gestió del Consell Escolar',
-              type: 'link',
-              url: 'https://ai.studio/apps/59657500-89ec-4663-b194-09199e8d17a4',
-              createdAt: new Date()
-            });
-          } catch (e) {
-            console.error("Error bootstrapping resource", e);
-          }
-        };
-        bootstrapResource();
-      }
+    // Sync active school if it's deleted
+    if (activeSchoolId && !schools.find(s => s.id === activeSchoolId)) {
+      setActiveSchoolId(null);
     }
-  }, [isAdmin, schools.length, resources.length, loading]);
+  }, [schools, activeSchoolId]);
 
   const handleLogin = async () => {
     try {

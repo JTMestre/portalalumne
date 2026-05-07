@@ -183,7 +183,7 @@ export default function App() {
       if (error.code === 'auth/popup-blocked') {
         alert("El navegador ha bloquejat la finestra de login. Si us plau, obre l'aplicació en una pestanya nova o permet els popups.");
       } else if (error.code === 'auth/unauthorized-domain') {
-        alert("Aquest domini no està autoritzat a Firebase. Si us plau, afegeix aquest domini a la llista de dominis autoritzats de Firebase (Consola > Authentication > Settings). Domain: " + window.location.hostname);
+        alert("⚠️ SEGURETAT: Aquest domini (" + window.location.hostname + ") encara no està autoritzat a la consola de Firebase. \n\nIMPORTANT: Els alumnes ja poden veure la web sense entrar. Aquest login és NOMÉS per a l'administrador.");
       } else {
         alert("Error de login: " + error.message);
       }
@@ -291,7 +291,7 @@ function Navbar({ onOpenAdmin }: { onOpenAdmin: () => void }) {
             {user ? (
               <button 
                 onClick={logout}
-                className="flex items-center gap-2 px-4 py-2 hover:bg-neutral-100 rounded-lg text-sm font-medium text-neutral-600"
+                className="flex items-center gap-2 px-4 py-2 hover:bg-red-50 rounded-lg text-sm font-medium text-red-600 transition-colors"
               >
                 <LogOut size={18} />
                 <span className="hidden lg:inline">Sortir</span>
@@ -299,10 +299,11 @@ function Navbar({ onOpenAdmin }: { onOpenAdmin: () => void }) {
             ) : (
               <button 
                 onClick={handleLogin}
-                className="flex items-center gap-2 px-5 py-2.5 bg-neutral-900 text-white rounded-xl text-sm font-medium hover:bg-neutral-800 transition-all active:scale-95"
+                className="flex items-center gap-2 px-4 py-2 text-slate-400 hover:text-primary transition-all text-sm font-bold uppercase tracking-widest"
+                title="Accés Administrador"
               >
                 <LogIn size={18} />
-                Entrar
+                <span className="hidden lg:inline text-[10px]">Accés Docent</span>
               </button>
             )}
         </div>
@@ -346,12 +347,12 @@ function Navbar({ onOpenAdmin }: { onOpenAdmin: () => void }) {
               </button>
             )}
             {user ? (
-              <button onClick={() => { logout(); setIsMenuOpen(false); }} className="text-left py-3 px-4 rounded-lg hover:bg-neutral-50 font-medium text-red-600 flex items-center gap-2">
+              <button onClick={() => { logout(); setIsMenuOpen(false); }} className="text-left py-3 px-4 rounded-lg hover:bg-red-50 font-medium text-red-600 flex items-center gap-2">
                 <LogOut size={18} /> Sortir
               </button>
             ) : (
-              <button onClick={() => { handleLogin(); setIsMenuOpen(false); }} className="text-left py-3 px-4 rounded-lg hover:bg-neutral-50 font-medium text-primary flex items-center gap-2">
-                <LogIn size={18} /> Entrar
+              <button onClick={() => { handleLogin(); setIsMenuOpen(false); }} className="text-left py-3 px-4 rounded-lg hover:bg-slate-50 font-bold text-slate-400 text-[10px] uppercase tracking-widest flex items-center gap-2">
+                <LogIn size={18} /> Accés Docent
               </button>
             )}
           </motion.div>
